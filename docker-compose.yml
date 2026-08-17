@@ -5,12 +5,3 @@ services:
     entrypoint: ["server"]
     ports:
       - "8080:8080"
-
-  client:
-    image: mmo:latest
-    entrypoint: ["client"]
-    environment:
-      G_SERVER: ws://server:8080
-    depends_on:
-      server:
-        condition: "service_started"
