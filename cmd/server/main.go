@@ -13,6 +13,8 @@ import (
 	"github.com/tobyd02/golang-mmo/pkg/server"
 )
 
+const TickSpeed = time.Millisecond * 200
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
@@ -95,7 +97,7 @@ func removeClient(client *server.GClient) {
 
 func gameLoop() {
 
-	ticker := time.NewTicker(1000 * time.Millisecond)
+	ticker := time.NewTicker(TickSpeed)
 	defer ticker.Stop()
 
 	for range ticker.C {
