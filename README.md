@@ -1,5 +1,13 @@
 # Concept
 
+## TODO
+
+- [ ] Generate items - i.e. some database that is serialised
+- [ ] Serialise data. relational database or something?
+- [ ] Simple Auth - user's login with an ID, which retrieves their data. Rather than random uuid each time a client is connected.
+
+# @TODO - Replace all that below
+
 ## MVP
 
 - Basic go server (Completely server authoratative)

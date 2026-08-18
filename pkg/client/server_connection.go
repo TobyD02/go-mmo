@@ -21,24 +21,32 @@ func NewServerConnection(conn *websocket.Conn) *ServerConnection {
 
 func (s *ServerConnection) SendMoveAction(dx, dy int) tea.Cmd {
 	return func() tea.Msg {
-		data, err := messages.NewGClientMoveMessage(dx, dy)
-
-		if err != nil {
-			return ConnectionErrorMsg{
-				Err: err,
-			}
-		}
-
-		err = s.Conn.WriteJSON(data)
-
-		if err != nil {
-			return ConnectionErrorMsg{
-				Err: err,
-			}
-		}
-
-		return nil
+		return s.sendMessage(messages.NewGClientMoveMessage(dx, dy))
 	}
+}
+
+func (s *ServerConnection) SendInteractAction(interactableId string) tea.Cmd {
+	return func() tea.Msg {
+		return s.sendMessage(messages.NewGClientInteractMessage(interactableId))
+	}
+}
+
+func (s *ServerConnection) sendMessage(data *messages.GMessage, err error) tea.Msg {
+	if err != nil {
+		return ConnectionErrorMsg{
+			Err: err,
+		}
+	}
+
+	err = s.Conn.WriteJSON(data)
+
+	if err != nil {
+		return ConnectionErrorMsg{
+			Err: err,
+		}
+	}
+
+	return nil
 }
 
 func (s *ServerConnection) ReadGameWorldDiff() tea.Cmd {

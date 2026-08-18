@@ -59,6 +59,15 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "right", "d":
 			return m, m.serverConn.SendMoveAction(1, 0)
+
+		case "space":
+			self := m.gameWorld.Players[m.clientId]
+			interactable := m.gameWorld.Clone().QueryInteractableAtPosition(self.Pos.X-1, self.Pos.Y)
+
+			if interactable != nil {
+				return m, m.serverConn.SendInteractAction(interactable.ID)
+			}
+
 		}
 
 	case game.GameWorldDiff:
@@ -85,10 +94,10 @@ func updateWorld(
 func (m GameModel) View() tea.View {
 	var b strings.Builder
 
-	viewportWidth := 20
-	viewportHeight := 10
+	viewportWidth := 64
+	viewportHeight := 48
 
-	client := m.gameWorld.Entities[m.clientId]
+	client := m.gameWorld.Players[m.clientId]
 	if client == nil {
 		return tea.NewView("Loading...")
 	}
@@ -112,10 +121,11 @@ func (m GameModel) View() tea.View {
 				continue
 			}
 
-			entities := m.gameWorld.QueryEntitiesAtPosition(x, y)
+			players := m.gameWorld.QueryPlayersAtPosition(x, y)
+			interactable := m.gameWorld.QueryInteractableAtPosition(x, y)
 
-			if len(entities) > 0 {
-				if entities[m.clientId] != nil {
+			if len(players) > 0 {
+				if players[m.clientId] != nil {
 					b.WriteString("MM")
 				} else {
 					b.WriteString("@@")
@@ -124,13 +134,16 @@ func (m GameModel) View() tea.View {
 				continue
 			}
 
-			switch m.gameWorld.Map[y][x] {
-			case game.TileWalkable:
-				b.WriteString("..")
-
-			case game.TileWall:
-				b.WriteString("██")
+			if interactable != nil {
+				if interactable.CurrentTickCooldown <= 0 {
+					b.WriteString("II")
+				} else {
+					b.WriteString("||")
+				}
+				continue
 			}
+
+			b.WriteString(game.TileChars[m.gameWorld.Map[y][x]])
 		}
 
 		b.WriteString("\n")

@@ -10,6 +10,7 @@ type GMessageType int
 const (
 	TClientConnectedMessage GMessageType = iota
 	TClientMoveMessage
+	TClientInteractMessage
 	TServerInitialWorldStateMessage
 )
 

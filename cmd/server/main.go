@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"maps"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"time"
@@ -32,6 +33,19 @@ var queuedDisconnections = make([]string, 0)
 
 func main() {
 	gameWorld = game.NewGameWorld(100, 20)
+
+	for y, row := range gameWorld.Map {
+		for x := range row {
+			if gameWorld.Map[y][x] != game.TileWalkable {
+				continue
+			}
+
+			if rand.IntN(20) == 1 {
+				gameWorld.AddInteractable(game.NewGInteractable(x, y, game.TestItem))
+			}
+		}
+	}
+
 	http.HandleFunc("/ws", clientConnection)
 
 	go gameLoop()
@@ -90,6 +104,8 @@ func clientConnection(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Failed to get initial world state")
 		return
 	}
+
+	fmt.Printf("%v", gameWorld.Interactables)
 
 	client.Conn.WriteMessage(websocket.TextMessage, worldMsg)
 
@@ -151,14 +167,22 @@ func doTick() {
 
 	queuedDisconnections = queuedDisconnections[:0]
 
+	// Do Client Actions
+
 	for clientID, client := range currentClients {
 		clientMessages := client.DrainMessages()
 
 		handleMessages(clientID, clientMessages, newGameWorld) // Client actions affect new game world
 	}
 
-	diff := game.GenerateDiff(gameWorld, newGameWorld) // Generate diff that can be sent to clients
+	// Do tickers before generating diff
+	newGameWorld.DoTickers()
+
+	// Generate diff that can be sent to clients
+	diff := game.GenerateDiff(gameWorld, newGameWorld)
 	msg, err := json.Marshal(diff)
+
+	// -------------------------
 
 	if err != nil {
 		fmt.Printf("Failed to do tick: %s", err)
@@ -191,7 +215,16 @@ func handleMessages(clientID string, msgs []*messages.GMessage, newGameWorld *ga
 			dx = moveData.Dx
 			dy = moveData.Dy
 		}
+
+		if m.Type == messages.TClientInteractMessage {
+			interactData, err := messages.ParseGClientInteractMessageData(m.Data)
+			if err != nil {
+				log.Printf("error: failed to parse move data")
+			}
+
+			newGameWorld.InteractWith(clientID, interactData.InteractableID)
+		}
 	}
 
-	newGameWorld.MoveEntity(clientID, dx, dy)
+	newGameWorld.MovePlayer(clientID, dx, dy)
 }

@@ -4,26 +4,22 @@ package game
 import (
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"reflect"
 )
 
-type GameWorldTile int
-
-const (
-	TileWalkable GameWorldTile = iota
-	TileWall
-)
-
 type GameWorld struct {
-	Map      [][]GameWorldTile
-	Entities map[string]*GEntity
-	Width    int
-	Height   int
+	Map           [][]GameWorldTile
+	Players       map[string]*GPlayer
+	Interactables map[string]*GInteractable
+	Width         int
+	Height        int
 }
 
 type GameWorldDiff struct {
-	MapDiff      []GameWorldMapDiff  `json:"map_diff"`
-	EntitiesDiff map[string]*GEntity `json:"entities_diff"`
+	MapDiff           []GameWorldMapDiff        `json:"map_diff"`
+	PlayersDiff       map[string]*GPlayer       `json:"players_diff"`
+	InteractablesDiff map[string]*GInteractable `json:"interactables_diff"`
 }
 
 type GameWorldMapDiff struct {
@@ -46,21 +42,28 @@ func NewGameWorld(width, height int) *GameWorld {
 		}
 	}
 
-	gameEntities := make(map[string]*GEntity)
+	gamePlayers := make(map[string]*GPlayer)
+	gameInteractables := make(map[string]*GInteractable)
 
 	return &GameWorld{
-		Map:      gameMap,
-		Entities: gameEntities,
-		Width:    width, Height: height,
+		Map:           gameMap,
+		Players:       gamePlayers,
+		Interactables: gameInteractables,
+		Width:         width, Height: height,
 	}
 }
 
 func (g *GameWorld) Clone() *GameWorld {
 	clone := NewGameWorld(g.Width, g.Height)
 
-	for id, entity := range g.Entities {
-		entityCopy := *entity
-		clone.Entities[id] = &entityCopy
+	for id, player := range g.Players {
+		playerCopy := *player
+		clone.Players[id] = &playerCopy
+	}
+
+	for id, interactable := range g.Interactables {
+		interactableCopy := *interactable
+		clone.Interactables[id] = &interactableCopy
 	}
 
 	for y := range g.Map {
@@ -71,7 +74,8 @@ func (g *GameWorld) Clone() *GameWorld {
 
 func GenerateDiff(old *GameWorld, new *GameWorld) GameWorldDiff {
 	diff := GameWorldDiff{
-		EntitiesDiff: make(map[string]*GEntity),
+		PlayersDiff:       make(map[string]*GPlayer),
+		InteractablesDiff: make(map[string]*GInteractable),
 	}
 
 	for y, row := range old.Map {
@@ -82,19 +86,35 @@ func GenerateDiff(old *GameWorld, new *GameWorld) GameWorldDiff {
 		}
 	}
 
-	// Added / changed entities
-	for id, newEntity := range new.Entities {
-		oldEntity, exists := old.Entities[id]
+	// Added / changed players
+	for id, newPlayer := range new.Players {
+		oldPlayer, exists := old.Players[id]
 
-		if !exists || !reflect.DeepEqual(oldEntity, newEntity) {
-			diff.EntitiesDiff[id] = newEntity
+		if !exists || !reflect.DeepEqual(oldPlayer, newPlayer) {
+			diff.PlayersDiff[id] = newPlayer
 		}
 	}
 
-	// Deleted Entities
-	for id := range old.Entities {
-		if _, exists := new.Entities[id]; !exists {
-			diff.EntitiesDiff[id] = nil
+	// Deleted Players
+	for id := range old.Players {
+		if _, exists := new.Players[id]; !exists {
+			diff.PlayersDiff[id] = nil
+		}
+	}
+
+	// Added / changed interactables
+	for id, newInteractable := range new.Interactables {
+		oldInteractable, exists := old.Interactables[id]
+
+		if !exists || !reflect.DeepEqual(oldInteractable, newInteractable) {
+			diff.InteractablesDiff[id] = newInteractable
+		}
+	}
+
+	// Deleted Interactables
+	for id := range old.Interactables {
+		if _, exists := new.Interactables[id]; !exists {
+			diff.InteractablesDiff[id] = nil
 		}
 	}
 
@@ -109,15 +129,29 @@ func (g *GameWorld) ApplyDiff(diff GameWorldDiff) {
 		g.Map[pos.Y][pos.X] = tile
 	}
 
-	if g.Entities == nil {
-		g.Entities = make(map[string]*GEntity)
+	// Players
+	if g.Players == nil {
+		g.Players = make(map[string]*GPlayer)
 	}
 
-	for id, entity := range diff.EntitiesDiff {
-		if entity == nil {
-			delete(g.Entities, id)
+	for id, player := range diff.PlayersDiff {
+		if player == nil {
+			delete(g.Players, id)
 		} else {
-			g.Entities[id] = entity
+			g.Players[id] = player
+		}
+	}
+
+	// Interactables
+	if g.Interactables == nil {
+		g.Interactables = make(map[string]*GInteractable)
+	}
+
+	for id, interactable := range diff.InteractablesDiff {
+		if interactable == nil {
+			delete(g.Interactables, id)
+		} else {
+			g.Interactables[id] = interactable
 		}
 	}
 }
@@ -130,15 +164,36 @@ func (g *GameWorld) QueryMap(x, y int) GameWorldTile {
 	return g.Map[y][x]
 }
 
-func (g *GameWorld) QueryEntitiesAtPosition(x, y int) map[string]*GEntity {
-	entities := make(map[string]*GEntity, 0)
-	for entityID, e := range g.Entities {
+func (g *GameWorld) QueryPlayersAtPosition(x, y int) map[string]*GPlayer {
+	players := make(map[string]*GPlayer, 0)
+	for playerID, e := range g.Players {
 		if e.Pos.X == x && e.Pos.Y == y {
-			entities[entityID] = e
+			players[playerID] = e
 		}
 	}
 
-	return entities
+	return players
+}
+
+func (g *GameWorld) QueryInteractableAtPosition(x, y int) *GInteractable { // singular since there can only be one
+	for _, i := range g.Interactables {
+		if i.Pos.X == x && i.Pos.Y == y {
+			return i
+		}
+	}
+
+	return nil
+}
+
+func (g *GameWorld) AddInteractable(interactable *GInteractable) {
+	if g.QueryInteractableAtPosition(interactable.Pos.X, interactable.Pos.Y) != nil {
+		return // Only a single interactable in a tile
+	}
+	if g.QueryMap(interactable.Pos.X, interactable.Pos.Y) != TileWalkable {
+		return // Only on walkable tiles, not inside a wall
+	}
+
+	g.Interactables[interactable.ID] = interactable
 }
 
 func (g *GameWorld) AddPlayer(playerID string, x, y int) error {
@@ -146,37 +201,36 @@ func (g *GameWorld) AddPlayer(playerID string, x, y int) error {
 		return fmt.Errorf("Cannot add player")
 	}
 
-	g.addEntity(&GEntity{
+	g.addPlayer(&GPlayer{
 		ID: playerID,
 		Pos: Vec2{
 			X: x, Y: y,
 		},
-		Tags: &[]GTag{GPlayer},
 	})
 
 	return nil
 }
 
 func (g *GameWorld) DeletePlayer(playerID string) {
-	delete(g.Entities, playerID)
+	delete(g.Players, playerID)
 }
 
-func (g *GameWorld) addEntity(entity *GEntity) {
-	g.Entities[entity.ID] = entity
+func (g *GameWorld) addPlayer(player *GPlayer) {
+	g.Players[player.ID] = player
 }
 
-func (g *GameWorld) MoveEntity(entityID string, dx, dy int) {
+func (g *GameWorld) MovePlayer(playerID string, dx, dy int) {
 	if dx == 0 && dy == 0 {
 		return
 	}
 
-	entity := g.Entities[entityID]
+	player := g.Players[playerID]
 
-	newX := entity.Pos.X + dx
-	newY := entity.Pos.Y + dy
+	newX := player.Pos.X + dx
+	newY := player.Pos.Y + dy
 
-	if (entity.Pos.Y+dy < 0 || entity.Pos.Y+dy >= len(g.Map)) ||
-		(entity.Pos.X+dx < 0 || entity.Pos.X+dx >= len(g.Map[entity.Pos.Y+dy])) {
+	if (player.Pos.Y+dy < 0 || player.Pos.Y+dy >= len(g.Map)) ||
+		(player.Pos.X+dx < 0 || player.Pos.X+dx >= len(g.Map[player.Pos.Y+dy])) {
 		return
 	}
 
@@ -184,8 +238,65 @@ func (g *GameWorld) MoveEntity(entityID string, dx, dy int) {
 		return // Cannot move to unwalkable tile
 	}
 
-	entity.Pos.X += dx
-	entity.Pos.Y += dy
+	if g.QueryInteractableAtPosition(newX, newY) != nil {
+		return // Cannot move over interactables?
+	}
 
-	log.Printf("WORLD | %s moved to x: %v y: %v", entity.ID, entity.Pos.X, entity.Pos.Y)
+	player.Pos.X += dx
+	player.Pos.Y += dy
+
+	log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
+}
+
+func (g *GameWorld) InteractWith(playerId string, interactableId string) {
+	player := g.Players[playerId]
+	interactable := g.Interactables[interactableId]
+
+	if player.Pos.Distance(interactable.Pos) > 1 {
+		return // Cannot
+	}
+
+	if interactable.CurrentTickCooldown != 0 {
+		return // Interactable is on cooldown
+	}
+
+	if interactable.OccupiedBy == "" {
+		interactable.OccupiedBy = playerId
+	} else if interactable.OccupiedBy != playerId {
+		return // Cannot - occupied by someone else
+	}
+
+	log.Printf("WORLD | %s interacted with %s", playerId, interactableId)
+
+	interactable.CurrentTicksWorked++
+	if interactable.CurrentTicksWorked >= interactable.TickWorkForYield {
+		interactable.CurrentTickCooldown = interactable.MaxTickCooldown
+
+		yieldAmount := rand.IntN(interactable.YieldAmountMax-interactable.YieldAmountMin) + interactable.YieldAmountMin
+
+		player.AddToInventory(&interactable.Yield, yieldAmount)
+		// log.Printf("WORLD | %s %v yielded %s from %s", playerId, yieldAmount, interactable.Yield.Name, interactableId)
+
+		log.Printf("WORLD | Player %s inventory: %v", playerId, player.Inventory)
+
+		for _, i := range player.Inventory {
+			log.Printf("\t ITEM | %s | %v", i.Item.Name, i.Quantity)
+		}
+	}
+}
+
+func (g *GameWorld) DoTickers() {
+	for _, interactable := range g.Interactables {
+		if interactable.CurrentTickCooldown <= 0 {
+			continue
+		}
+
+		interactable.CurrentTickCooldown--
+
+		if interactable.CurrentTickCooldown <= 0 {
+			interactable.OccupiedBy = ""
+			interactable.CurrentTicksWorked = 0
+			log.Printf("WORLD | %s interactable was reset", interactable.ID)
+		}
+	}
 }
