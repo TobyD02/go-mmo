@@ -1,19 +1,17 @@
 package client
 
 import (
-	"encoding/json"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/gorilla/websocket"
 
-	"github.com/tobyd02/golang-mmo/pkg/game"
-	"github.com/tobyd02/golang-mmo/pkg/server"
+	game "github.com/tobyd02/golang-mmo/pkg/game_common"
 )
 
 type GameModel struct {
-	gameWorld *game.GameWorld
-	conn      *websocket.Conn
+	gameWorld  *game.GameWorld
+	serverConn *ServerConnection
 }
 
 type WorldStateMsg map[string]struct {
@@ -30,13 +28,13 @@ func InitialModel(
 	conn *websocket.Conn,
 ) GameModel {
 	return GameModel{
-		gameWorld: gameWorld,
-		conn:      conn,
+		gameWorld:  gameWorld,
+		serverConn: NewServerConnection(conn),
 	}
 }
 
 func (m GameModel) Init() tea.Cmd {
-	return readWorldState(m.conn)
+	return m.serverConn.ReadGameWorldDiff()
 }
 
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -48,24 +46,24 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "up", "w":
-			return m, sendAction(m.conn, 0, -1)
+			return m, m.serverConn.SendMoveAction(0, -1)
 
 		case "down", "s":
-			return m, sendAction(m.conn, 0, 1)
+			return m, m.serverConn.SendMoveAction(0, 1)
 
 		case "left", "a":
-			return m, sendAction(m.conn, -1, 0)
+			return m, m.serverConn.SendMoveAction(-1, 0)
 
 		case "right", "d":
-			return m, sendAction(m.conn, 1, 0)
+			return m, m.serverConn.SendMoveAction(1, 0)
 		}
 
-	case WorldStateMsg:
+	case game.GameWorldDiff:
 		updateWorld(m.gameWorld, msg)
 
 		// IMPORTANT:
 		// Keep listening for the next server update.
-		return m, readWorldState(m.conn)
+		return m, m.serverConn.ReadGameWorldDiff()
 
 	case ConnectionErrorMsg:
 		return m, tea.Quit
@@ -76,68 +74,9 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func updateWorld(
 	world *game.GameWorld,
-	state WorldStateMsg,
+	diff game.GameWorldDiff,
 ) {
-	// Clear the existing map.
-	for y := range world.Map {
-		for x := range world.Map[y] {
-			world.Map[y][x] = game.TileBlank
-		}
-	}
-
-	// Draw whatever the server says exists.
-	for _, position := range state {
-		if position.Y < 0 ||
-			position.Y >= len(world.Map) {
-			continue
-		}
-
-		if position.X < 0 ||
-			position.X >= len(world.Map[position.Y]) {
-			continue
-		}
-
-		world.Map[position.Y][position.X] = game.TilePlayer
-	}
-}
-
-func readWorldState(conn *websocket.Conn) tea.Cmd {
-	return func() tea.Msg {
-		_, message, err := conn.ReadMessage()
-
-		if err != nil {
-			return ConnectionErrorMsg{
-				Err: err,
-			}
-		}
-
-		var worldState WorldStateMsg
-
-		if err := json.Unmarshal(message, &worldState); err != nil {
-			return ConnectionErrorMsg{
-				Err: err,
-			}
-		}
-
-		return worldState
-	}
-}
-
-func sendAction(conn *websocket.Conn, dx, dy int) tea.Cmd {
-	return func() tea.Msg {
-		err := conn.WriteJSON(server.GClientAction{
-			Dx: dx,
-			Dy: dy,
-		})
-
-		if err != nil {
-			return ConnectionErrorMsg{
-				Err: err,
-			}
-		}
-
-		return nil
-	}
+	world.ApplyDiff(diff)
 }
 
 func (m GameModel) View() tea.View {
@@ -147,10 +86,10 @@ func (m GameModel) View() tea.View {
 		for _, tile := range row {
 			switch tile {
 			case game.TileBlank:
-				b.WriteString("·")
+				b.WriteString("..")
 
-			case game.TilePlayer:
-				b.WriteString("@")
+			case game.TileEntity:
+				b.WriteString("██")
 			}
 		}
 

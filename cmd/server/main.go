@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	game "github.com/tobyd02/golang-mmo/pkg/game_common"
+	"github.com/tobyd02/golang-mmo/pkg/messages"
 	"github.com/tobyd02/golang-mmo/pkg/server"
 )
 
@@ -21,17 +23,12 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-type PlayerPos struct {
-	X int `json:"x"`
-	Y int `json:"y"`
-}
-
 var clients = make(map[string]*server.GClient)
-var worldState = make(map[string]*PlayerPos)
-
 var clientsMutex sync.RWMutex
+var gameWorld *game.GameWorld
 
 func main() {
+	gameWorld = game.NewGameWorld(50, 30)
 	http.HandleFunc("/ws", clientConnection)
 
 	go gameLoop()
@@ -70,19 +67,33 @@ func clientConnection(w http.ResponseWriter, r *http.Request) {
 	clientsMutex.Lock()
 	// Assig the client connection
 	clients[client.ID] = client
-	worldState[client.ID] = &PlayerPos{25, 15}
+	gameWorld.AddPlayer(client.ID, 25, 15)
+	// gameWorldDiff[client.ID] = &PlayerPos{25, 15}
 
 	clientsMutex.Unlock()
-
-	go client.PingLoop()
 
 	// Defer deletion on disconnect
 	defer removeClient(client)
 
-	defer delete(clients, client.ID)
+	// First message is world state
+	serverInitialWorldStateMessage, err := messages.NewGServerInitialWorldStateMessage(gameWorld)
+	if err != nil {
+		fmt.Printf("Failed to get initial world state")
+		return
+	}
+
+	worldMsg, err := json.Marshal(serverInitialWorldStateMessage)
+	if err != nil {
+		fmt.Printf("Failed to get initial world state")
+		return
+	}
+
+	client.Conn.WriteMessage(websocket.TextMessage, worldMsg)
+
+	go client.PingLoop()
 	log.Println("client connected: ", client.ID)
 
-	err = client.ReadActions()
+	err = client.ReadMessages()
 	if err != nil {
 		fmt.Printf("client disconnected %s", client.ID)
 	}
@@ -92,7 +103,7 @@ func clientConnection(w http.ResponseWriter, r *http.Request) {
 func removeClient(client *server.GClient) {
 	delete(clients, client.ID)
 	client.Conn.Close()
-	delete(worldState, client.ID)
+	gameWorld.DeletePlayer(client.ID)
 }
 
 func gameLoop() {
@@ -106,36 +117,24 @@ func gameLoop() {
 }
 
 func doTick() {
-	fmt.Println("doing tick")
-
-	// updates := make(map[string]any)
-
-	// world is 50 x 30
+	// fmt.Println("doing tick")
 
 	clientsMutex.RLock()
 
 	currentClients := make(map[string]*server.GClient, len(clients))
 	maps.Copy(currentClients, clients)
-
 	clientsMutex.RUnlock()
 
+	newGameWorld := gameWorld.Clone() // Copy gameWorld struct - it may be a pointer or contain pointers - they should be copied also
+
 	for clientID, client := range currentClients {
-		clientActions := client.DrainActions()
+		clientMessages := client.DrainMessages()
 
-		dx, dy := 0, 0
-
-		for _, a := range clientActions {
-			dx = a.Dx
-			dy = a.Dy
-		}
-
-		ws := worldState[clientID]
-		ws.X = ws.X + dx
-		ws.Y = ws.Y + dy
-		// updates[clientID] = clientActions
+		handleMessages(clientID, clientMessages, newGameWorld) // Client actions affect new game world
 	}
 
-	msg, err := json.Marshal(worldState)
+	diff := game.GenerateDiff(gameWorld, newGameWorld) // Generate diff that can be sent to clients
+	msg, err := json.Marshal(diff)
 
 	if err != nil {
 		fmt.Printf("Failed to do tick: %s", err)
@@ -145,4 +144,30 @@ func doTick() {
 	for _, client := range clients {
 		client.Conn.WriteMessage(websocket.TextMessage, msg)
 	}
+
+	// Set curren t game world to new game world
+	gameWorld = newGameWorld
+}
+
+func handleMessages(clientID string, msgs []*messages.GMessage, newGameWorld *game.GameWorld) {
+	dx, dy := 0, 0
+
+	// if len(msgs) > 0 {
+	// 	fmt.Printf("Handling Messages: %v\n", msgs)
+	// }
+
+	for _, m := range msgs {
+		if m.Type == messages.TClientMoveMessage {
+			moveData, err := messages.ParseGClientMoveMessageData(m.Data)
+			if err != nil {
+				log.Printf("error: failed to parse move data")
+			}
+
+			// Assign them to only the latest received movement message - 1 tile per tick
+			dx = moveData.Dx
+			dy = moveData.Dy
+		}
+	}
+
+	newGameWorld.MoveEntity(clientID, dx, dy)
 }

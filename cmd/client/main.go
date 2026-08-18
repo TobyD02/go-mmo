@@ -8,8 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/tobyd02/golang-mmo/pkg/client"
-	"github.com/tobyd02/golang-mmo/pkg/game"
-	"github.com/tobyd02/golang-mmo/pkg/server"
+	"github.com/tobyd02/golang-mmo/pkg/messages"
 )
 
 func main() {
@@ -27,14 +26,30 @@ func main() {
 	}
 	defer conn.Close()
 
-	err = conn.WriteJSON(server.GClientConnection{
-		ID: uuid.NewString(),
-	})
+	// Connect to server
+	connected, err := messages.NewGClientConnectedMessage(uuid.NewString())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	world := game.NewGameWorld(50, 30)
+	err = conn.WriteJSON(connected)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Wait for initial world state
+	var msg messages.GMessage
+	if err := conn.ReadJSON(&msg); err != nil {
+		log.Fatalf("Expected world state, got message type %v", msg.Type)
+	}
+
+	parsedData, err := messages.ParseGServerInitialWorldStateData(msg.Data)
+	if err != nil {
+		log.Fatalf("Failed to parse initial world state message")
+	}
+
+	world := parsedData.InitialWorldState
 
 	model := client.InitialModel(world, conn)
 

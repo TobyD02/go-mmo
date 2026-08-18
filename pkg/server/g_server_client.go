@@ -2,25 +2,25 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/tobyd02/golang-mmo/pkg/messages"
 )
 
 type GClient struct {
-	Actions chan []byte
-	Conn    *websocket.Conn
-	ID      string
+	Messages chan []byte
+	Conn     *websocket.Conn
+	ID       string
 }
 
 func NewGClient(conn *websocket.Conn) *GClient {
-	clientActions := make(chan []byte, 100)
+	clientMessages := make(chan []byte, 100)
 
 	return &GClient{
-		clientActions,
+		clientMessages,
 		conn,
 		"",
 	}
@@ -33,20 +33,22 @@ func (c *GClient) EstablishConnection() error {
 		return fmt.Errorf("failed to read connection message: %s", err)
 	}
 
-	var clientConnection GClientConnection
+	clientConnectionMessage, err := messages.ParseMessage(message)
 
-	err = json.Unmarshal(message, &clientConnection)
-
-	if err != nil {
-		return fmt.Errorf("Invalid connection message: ", err)
+	if err != nil || clientConnectionMessage.Type != messages.TClientConnectedMessage {
+		return fmt.Errorf("invalid connection message: %s", err)
 	}
 
-	c.ID = clientConnection.ID
+	connectionData, err := messages.ParseGClientConnectedData(clientConnectionMessage.Data)
+	if err != nil {
+		return fmt.Errorf("invalid connection message: %s", err)
+	}
 
+	c.ID = connectionData.ID
 	return nil
 }
 
-func (c *GClient) ReadActions() error {
+func (c *GClient) ReadMessages() error {
 
 	c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 
@@ -62,7 +64,7 @@ func (c *GClient) ReadActions() error {
 			return err
 		}
 
-		c.Actions <- message
+		c.Messages <- message
 	}
 }
 
@@ -84,28 +86,26 @@ func (c *GClient) PingLoop() {
 	}
 }
 
-func (c *GClient) DrainActions() []GClientAction {
-	var actions []GClientAction
+func (c *GClient) DrainMessages() []*messages.GMessage {
+	var msgs []*messages.GMessage
 
 drain:
 	for {
 		select {
-		case a := <-c.Actions:
-			var action GClientAction
-			err := json.Unmarshal(a, &action)
+		case a := <-c.Messages:
+			message, err := messages.ParseMessage(a)
 
 			if err != nil {
 				log.Printf("failed to decode client action: %s", err)
 				break
 			}
 
-			actions = append(actions, action)
+			msgs = append(msgs, message)
 		default:
 			break drain
 		}
 
 	}
 
-	return actions
-
+	return msgs
 }
