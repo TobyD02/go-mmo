@@ -85,10 +85,35 @@ func updateWorld(
 func (m GameModel) View() tea.View {
 	var b strings.Builder
 
-	for y, row := range m.gameWorld.Map {
-		for x, tile := range row {
+	viewportWidth := 20
+	viewportHeight := 10
+
+	client := m.gameWorld.Entities[m.clientId]
+	if client == nil {
+		return tea.NewView("Loading...")
+	}
+
+	centerX := client.Pos.X
+	centerY := client.Pos.Y
+
+	startX := centerX - viewportWidth/2
+	startY := centerY - viewportHeight/2
+
+	endX := startX + viewportWidth
+	endY := startY + viewportHeight
+
+	for y := startY; y < endY; y++ {
+		for x := startX; x < endX; x++ {
+
+			// Outside the world
+			if y < 0 || y >= m.gameWorld.Height ||
+				x < 0 || x >= m.gameWorld.Width {
+				b.WriteString("  ")
+				continue
+			}
 
 			entities := m.gameWorld.QueryEntitiesAtPosition(x, y)
+
 			if len(entities) > 0 {
 				if entities[m.clientId] != nil {
 					b.WriteString("MM")
@@ -99,7 +124,7 @@ func (m GameModel) View() tea.View {
 				continue
 			}
 
-			switch tile {
+			switch m.gameWorld.Map[y][x] {
 			case game.TileWalkable:
 				b.WriteString("..")
 
