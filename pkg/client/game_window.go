@@ -12,6 +12,7 @@ import (
 type GameModel struct {
 	gameWorld  *game.GameWorld
 	serverConn *ServerConnection
+	clientId   string
 }
 
 type WorldStateMsg map[string]struct {
@@ -26,10 +27,12 @@ type ConnectionErrorMsg struct {
 func InitialModel(
 	gameWorld *game.GameWorld,
 	conn *websocket.Conn,
+	clientId string,
 ) GameModel {
 	return GameModel{
 		gameWorld:  gameWorld,
 		serverConn: NewServerConnection(conn),
+		clientId:   clientId,
 	}
 }
 
@@ -82,14 +85,25 @@ func updateWorld(
 func (m GameModel) View() tea.View {
 	var b strings.Builder
 
-	for _, row := range m.gameWorld.Map {
-		for _, tile := range row {
+	for y, row := range m.gameWorld.Map {
+		for x, tile := range row {
+
+			entities := m.gameWorld.QueryEntitiesAtPosition(x, y)
+			if len(entities) > 0 {
+				if entities[m.clientId] != nil {
+					b.WriteString("MM")
+				} else {
+					b.WriteString("@@")
+				}
+
+				continue
+			}
 
 			switch tile {
-			case game.TileBlank:
+			case game.TileWalkable:
 				b.WriteString("..")
 
-			case game.TileEntity:
+			case game.TileWall:
 				b.WriteString("██")
 			}
 		}

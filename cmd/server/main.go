@@ -31,7 +31,7 @@ var queuedConnections = make([]string, 0)
 var queuedDisconnections = make([]string, 0)
 
 func main() {
-	gameWorld = game.NewGameWorld(50, 30)
+	gameWorld = game.NewGameWorld(100, 20)
 	http.HandleFunc("/ws", clientConnection)
 
 	go gameLoop()
@@ -136,7 +136,10 @@ func doTick() {
 
 	// Handle new connections
 	for _, clientID := range queuedConnections {
-		newGameWorld.AddPlayer(clientID, 25, 15)
+		err := newGameWorld.AddPlayer(clientID, 10, 5)
+		if err != nil {
+			removeClient(clients[clientID])
+		}
 	}
 
 	queuedConnections = queuedConnections[:0]

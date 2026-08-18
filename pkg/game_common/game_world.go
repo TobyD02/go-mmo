@@ -2,16 +2,16 @@
 package game
 
 import (
+	"fmt"
 	"log"
-	"maps"
 	"reflect"
 )
 
 type GameWorldTile int
 
 const (
-	TileBlank GameWorldTile = iota
-	TileEntity
+	TileWalkable GameWorldTile = iota
+	TileWall
 )
 
 type GameWorld struct {
@@ -35,6 +35,15 @@ func NewGameWorld(width, height int) *GameWorld {
 	gameMap := make([][]GameWorldTile, height)
 	for y := range gameMap {
 		gameMap[y] = make([]GameWorldTile, width)
+	}
+
+	// Set walls
+	for y, row := range gameMap {
+		for x := range row {
+			if (x == 0 || x == width-1) || (y == 0 || y == height-1) {
+				gameMap[y][x] = TileWall
+			}
+		}
 	}
 
 	gameEntities := make(map[string]*GEntity)
@@ -73,11 +82,19 @@ func GenerateDiff(old *GameWorld, new *GameWorld) GameWorldDiff {
 		}
 	}
 
-	for id, oldEntity := range old.Entities {
-		newEntity, exists := new.Entities[id]
+	// Added / changed entities
+	for id, newEntity := range new.Entities {
+		oldEntity, exists := old.Entities[id]
 
-		if exists && !reflect.DeepEqual(oldEntity, newEntity) {
+		if !exists || !reflect.DeepEqual(oldEntity, newEntity) {
 			diff.EntitiesDiff[id] = newEntity
+		}
+	}
+
+	// Deleted Entities
+	for id := range old.Entities {
+		if _, exists := new.Entities[id]; !exists {
+			diff.EntitiesDiff[id] = nil
 		}
 	}
 
@@ -96,10 +113,39 @@ func (g *GameWorld) ApplyDiff(diff GameWorldDiff) {
 		g.Entities = make(map[string]*GEntity)
 	}
 
-	maps.Copy(g.Entities, diff.EntitiesDiff)
+	for id, entity := range diff.EntitiesDiff {
+		if entity == nil {
+			delete(g.Entities, id)
+		} else {
+			g.Entities[id] = entity
+		}
+	}
 }
 
-func (g *GameWorld) AddPlayer(playerID string, x, y int) {
+func (g *GameWorld) QueryMap(x, y int) GameWorldTile {
+	if x <= 0 || x >= g.Width || y <= 0 || y >= g.Height {
+		return TileWall
+	}
+
+	return g.Map[y][x]
+}
+
+func (g *GameWorld) QueryEntitiesAtPosition(x, y int) map[string]*GEntity {
+	entities := make(map[string]*GEntity, 0)
+	for entityID, e := range g.Entities {
+		if e.Pos.X == x && e.Pos.Y == y {
+			entities[entityID] = e
+		}
+	}
+
+	return entities
+}
+
+func (g *GameWorld) AddPlayer(playerID string, x, y int) error {
+	if g.QueryMap(x, y) != TileWalkable {
+		return fmt.Errorf("Cannot add player")
+	}
+
 	g.addEntity(&GEntity{
 		ID: playerID,
 		Pos: Vec2{
@@ -107,17 +153,15 @@ func (g *GameWorld) AddPlayer(playerID string, x, y int) {
 		},
 		Tags: &[]GTag{GPlayer},
 	})
+
+	return nil
 }
 
 func (g *GameWorld) DeletePlayer(playerID string) {
-	playerPos := g.Entities[playerID].Pos
 	delete(g.Entities, playerID)
-
-	g.Map[playerPos.Y][playerPos.X] = TileBlank
 }
 
 func (g *GameWorld) addEntity(entity *GEntity) {
-	g.Map[entity.Pos.Y][entity.Pos.X] = TileEntity
 	g.Entities[entity.ID] = entity
 }
 
@@ -128,17 +172,20 @@ func (g *GameWorld) MoveEntity(entityID string, dx, dy int) {
 
 	entity := g.Entities[entityID]
 
+	newX := entity.Pos.X + dx
+	newY := entity.Pos.Y + dy
+
 	if (entity.Pos.Y+dy < 0 || entity.Pos.Y+dy >= len(g.Map)) ||
 		(entity.Pos.X+dx < 0 || entity.Pos.X+dx >= len(g.Map[entity.Pos.Y+dy])) {
 		return
 	}
 
-	g.Map[entity.Pos.Y][entity.Pos.X] = TileBlank
+	if g.QueryMap(newX, newY) != TileWalkable {
+		return // Cannot move to unwalkable tile
+	}
 
 	entity.Pos.X += dx
 	entity.Pos.Y += dy
-
-	g.Map[entity.Pos.Y][entity.Pos.X] = TileEntity
 
 	log.Printf("WORLD | %s moved to x: %v y: %v", entity.ID, entity.Pos.X, entity.Pos.Y)
 }

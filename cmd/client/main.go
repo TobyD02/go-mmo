@@ -27,7 +27,8 @@ func main() {
 	defer conn.Close()
 
 	// Connect to server
-	connected, err := messages.NewGClientConnectedMessage(uuid.NewString())
+	clientId := uuid.NewString()
+	connected, err := messages.NewGClientConnectedMessage(clientId)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func main() {
 
 	world := parsedData.InitialWorldState
 
-	model := client.InitialModel(world, conn)
+	model := client.InitialModel(world, conn, clientId)
 
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		log.Fatal(err)
