@@ -27,6 +27,9 @@ var clients = make(map[string]*server.GClient)
 var clientsMutex sync.RWMutex
 var gameWorld *game.GameWorld
 
+var queuedConnections = make([]string, 0)
+var queuedDisconnections = make([]string, 0)
+
 func main() {
 	gameWorld = game.NewGameWorld(50, 30)
 	http.HandleFunc("/ws", clientConnection)
@@ -67,7 +70,7 @@ func clientConnection(w http.ResponseWriter, r *http.Request) {
 	clientsMutex.Lock()
 	// Assig the client connection
 	clients[client.ID] = client
-	gameWorld.AddPlayer(client.ID, 25, 15)
+	queuedConnections = append(queuedConnections, client.ID)
 	// gameWorldDiff[client.ID] = &PlayerPos{25, 15}
 
 	clientsMutex.Unlock()
@@ -101,9 +104,13 @@ func clientConnection(w http.ResponseWriter, r *http.Request) {
 }
 
 func removeClient(client *server.GClient) {
+	clientsMutex.Lock()
+
 	delete(clients, client.ID)
+	queuedDisconnections = append(queuedDisconnections, client.ID)
+	clientsMutex.Unlock()
+
 	client.Conn.Close()
-	gameWorld.DeletePlayer(client.ID)
 }
 
 func gameLoop() {
@@ -126,6 +133,20 @@ func doTick() {
 	clientsMutex.RUnlock()
 
 	newGameWorld := gameWorld.Clone() // Copy gameWorld struct - it may be a pointer or contain pointers - they should be copied also
+
+	// Handle new connections
+	for _, clientID := range queuedConnections {
+		newGameWorld.AddPlayer(clientID, 25, 15)
+	}
+
+	queuedConnections = queuedConnections[:0]
+
+	// Handle queuedDisconnections
+	for _, clientID := range queuedDisconnections {
+		newGameWorld.DeletePlayer(clientID)
+	}
+
+	queuedDisconnections = queuedDisconnections[:0]
 
 	for clientID, client := range currentClients {
 		clientMessages := client.DrainMessages()

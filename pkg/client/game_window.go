@@ -84,6 +84,7 @@ func (m GameModel) View() tea.View {
 
 	for _, row := range m.gameWorld.Map {
 		for _, tile := range row {
+
 			switch tile {
 			case game.TileBlank:
 				b.WriteString("..")
