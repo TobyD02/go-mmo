@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand/v2"
-	"reflect"
 
 	"github.com/tobyd02/golang-mmo/pkg/game"
 )
@@ -12,12 +11,21 @@ import (
 type GWorldController struct {
 	GameWorld     *game.GameWorld
 	getServerTick func() int
+
+	changedPlayers       map[string]struct{}
+	changedInteractables map[string]struct{}
+	changedTiles         map[game.Vec2]struct{}
 }
 
 func NewGWorldController(worldWidth, worldHeight int, getTicker func() int) *GWorldController {
 	return &GWorldController{
 		GameWorld:     game.NewGameWorld(worldWidth, worldHeight),
 		getServerTick: getTicker,
+
+		changedPlayers: make(map[string]struct{}),
+
+		changedInteractables: make(map[string]struct{}),
+		changedTiles:         make(map[game.Vec2]struct{}),
 	}
 }
 
@@ -44,71 +52,45 @@ func (wc *GWorldController) SetupWorld(
 
 }
 
-func (wc *GWorldController) CloneWorld() *game.GameWorld {
-	clone := game.NewGameWorld(wc.GameWorld.Width, wc.GameWorld.Height)
-
-	for id, player := range wc.GameWorld.Players {
-		playerCopy := *player
-		clone.Players[id] = &playerCopy
-	}
-
-	for id, interactable := range wc.GameWorld.Interactables {
-		interactableCopy := *interactable
-		clone.Interactables[id] = &interactableCopy
-	}
-
-	for y := range wc.GameWorld.Map {
-		copy(clone.Map[y], wc.GameWorld.Map[y])
-	}
-	return clone
-}
-
-// GenerateWorldDiff Generates diff from and older world state
-func (wc *GWorldController) GenerateWorldDiff(old *game.GameWorld) game.GameWorldDiff {
+func (wc *GWorldController) BuildWorldDiff() game.GameWorldDiff {
 	diff := game.GameWorldDiff{
 		PlayersDiff:       make(map[string]*game.GPlayer),
 		InteractablesDiff: make(map[string]*game.GInteractable),
 	}
 
-	for y, row := range old.Map {
-		for x, tile := range row {
-			if wc.GameWorld.Map[y][x] != tile {
-				diff.MapDiff = append(diff.MapDiff, game.GameWorldMapDiff{Pos: game.Vec2{X: x, Y: y}, Tile: wc.GameWorld.Map[y][x]})
-			}
+	for playerID := range wc.changedPlayers {
+		player, exists := wc.GameWorld.Players[playerID]
+
+		if exists {
+			diff.PlayersDiff[playerID] = player
+		} else {
+			diff.PlayersDiff[playerID] = nil
 		}
 	}
 
-	// Added / changed players
-	for id, newPlayer := range wc.GameWorld.Players {
-		oldPlayer, exists := old.Players[id]
+	for id := range wc.changedInteractables {
+		interactable, exists := wc.GameWorld.Interactables[id]
 
-		if !exists || !reflect.DeepEqual(oldPlayer, newPlayer) {
-			diff.PlayersDiff[id] = newPlayer
-		}
-	}
-
-	// Deleted Players
-	for id := range old.Players {
-		if _, exists := wc.GameWorld.Players[id]; !exists {
-			diff.PlayersDiff[id] = nil
-		}
-	}
-
-	// Added / changed interactables
-	for id, newInteractable := range wc.GameWorld.Interactables {
-		oldInteractable, exists := old.Interactables[id]
-
-		if !exists || !reflect.DeepEqual(oldInteractable, newInteractable) {
-			diff.InteractablesDiff[id] = newInteractable
-		}
-	}
-
-	// Deleted Interactables
-	for id := range old.Interactables {
-		if _, exists := wc.GameWorld.Interactables[id]; !exists {
+		if exists {
+			diff.InteractablesDiff[id] = interactable
+		} else {
 			diff.InteractablesDiff[id] = nil
 		}
 	}
+
+	for pos := range wc.changedTiles {
+		diff.MapDiff = append(
+			diff.MapDiff,
+			game.GameWorldMapDiff{
+				Pos:  pos,
+				Tile: wc.GameWorld.Map[pos.Y][pos.X],
+			},
+		)
+	}
+
+	clear(wc.changedPlayers)
+	clear(wc.changedInteractables)
+	clear(wc.changedTiles)
 
 	return diff
 }
@@ -140,11 +122,19 @@ func (wc *GWorldController) AddPlayer(playerID string, x, y int) error {
 		},
 	})
 
+	wc.changedPlayers[playerID] = struct{}{}
+
 	return nil
 }
 
 func (wc *GWorldController) DeletePlayer(playerID string) {
+	if _, exists := wc.GameWorld.Players[playerID]; !exists {
+		return
+	}
+
 	delete(wc.GameWorld.Players, playerID)
+
+	wc.changedPlayers[playerID] = struct{}{}
 }
 
 func (wc *GWorldController) addPlayer(player *game.GPlayer) {
@@ -156,7 +146,10 @@ func (wc *GWorldController) MovePlayer(playerID string, dx, dy int) {
 		return
 	}
 
-	player := wc.GameWorld.Players[playerID]
+	player, exists := wc.GameWorld.Players[playerID]
+	if !exists { // Safe guard
+		return
+	}
 
 	newX := player.Pos.X + dx
 	newY := player.Pos.Y + dy
@@ -177,12 +170,21 @@ func (wc *GWorldController) MovePlayer(playerID string, dx, dy int) {
 	player.Pos.X += dx
 	player.Pos.Y += dy
 
+	wc.changedPlayers[playerID] = struct{}{}
+
 	// log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
 }
 
 func (wc *GWorldController) InteractWith(playerID string, interactableID string) {
-	player := wc.GameWorld.Players[playerID]
-	interactable := wc.GameWorld.Interactables[interactableID]
+	player, exists := wc.GameWorld.Players[playerID]
+	if !exists { // Safe guard
+		return
+	}
+
+	interactable, exists := wc.GameWorld.Interactables[interactableID]
+	if !exists { // Safe guard
+		return
+	}
 
 	if !interactable.PlayerCanOccupyOrWork(player) {
 		return
@@ -199,6 +201,8 @@ func (wc *GWorldController) InteractWith(playerID string, interactableID string)
 			log.Printf("\t ITEM | %s | %v", i.Item.Name, i.Quantity)
 		}
 	}
+
+	wc.changedInteractables[interactableID] = struct{}{}
 }
 
 func (wc *GWorldController) DoTickers() {
@@ -214,6 +218,8 @@ func (wc *GWorldController) DoTickers() {
 			} else {
 				interactable.OccupantCooldown--
 			}
+
+			wc.changedInteractables[interactable.ID] = struct{}{}
 		}
 
 		if interactable.CurrentTickCooldown <= 0 {
@@ -227,5 +233,7 @@ func (wc *GWorldController) DoTickers() {
 			interactable.CurrentTicksWorked = 0
 			log.Printf("WORLD | %s interactable was reset", interactable.ID)
 		}
+
+		wc.changedInteractables[interactable.ID] = struct{}{}
 	}
 }

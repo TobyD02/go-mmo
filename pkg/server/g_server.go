@@ -68,7 +68,10 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	s.clientsMutex.Lock()
+
 	if _, exists := s.Clients[client.ID]; exists {
+		s.clientsMutex.Unlock()
 		client.WriteMessage(
 			websocket.TextMessage,
 			[]byte("Client already connected"),
@@ -78,7 +81,6 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 
 	// Assign the client connection
 
-	s.clientsMutex.Lock()
 	s.Clients[client.ID] = client
 	s.queuedConnections = append(s.queuedConnections, client.ID)
 
@@ -86,34 +88,33 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 
 	// Defer deletion on disconnect
 	defer s.removeClient(client)
-	s.handleNewActiveClientConnection(client)
-}
-
-func (s *GServer) handleNewActiveClientConnection(client *GServerClient) {
-	// First message is world state
-	serverInitialWorldStateMessage, err := messages.NewGServerInitialWorldStateMessage(s.WorldController.GameWorld)
-	if err != nil {
-		fmt.Printf("Failed to get initial world state")
-		return
-	}
-
-	// Marshal the message
-	worldMsg, err := json.Marshal(serverInitialWorldStateMessage)
-	if err != nil {
-		fmt.Printf("Failed to get initial world state")
-		return
-	}
-
-	// Send the inital message
-	client.WriteMessage(websocket.TextMessage, worldMsg)
 
 	// Initialise the ping loop (ensure client is connected)
 	go client.PingLoop()
-	log.Println("client connected: ", client.ID)
+	// log.Println("client connected: ", client.ID)
 
 	err = client.ReadMessages()
 	if err != nil {
-		fmt.Printf("client disconnected %s", client.ID)
+		// fmt.Printf("client disconnected %s", client.ID)
+	}
+}
+
+func (s *GServer) buildInitialWorldStateMessage() ([]byte, error) {
+	// First message is world state
+	serverInitialWorldStateMessage, err := messages.NewGServerInitialWorldStateMessage(s.WorldController.GameWorld)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get initial world state")
+	}
+
+	// Marshal the message
+	return json.Marshal(serverInitialWorldStateMessage)
+}
+
+func (s *GServer) sendInitialWorldState(client *GServerClient, initialWorldStateMessage []byte) {
+	// Send the inital message
+	err := client.WriteMessage(websocket.TextMessage, initialWorldStateMessage)
+	if err != nil {
+		log.Printf("Failed to send initial world state")
 	}
 }
 
@@ -127,33 +128,61 @@ func (s *GServer) removeClient(client *GServerClient) {
 	client.Conn.Close()
 }
 
+func (s *GServer) clientCount() int {
+	s.clientsMutex.RLock()
+	defer s.clientsMutex.RUnlock()
+
+	return len(s.Clients)
+}
+
 func (s *GServer) GameLoop() {
 	ticker := time.NewTicker(s.TickSpeed)
 	defer ticker.Stop()
 
+	peakTickSpeed := time.Since(time.Now())
+
 	for range ticker.C {
+		now := time.Now()
 		s.doTick()
+
+		timeTaken := time.Since(now)
+		if timeTaken > peakTickSpeed {
+			peakTickSpeed = timeTaken
+		}
+		if timeTaken >= time.Millisecond*5 {
+			log.Printf(
+				"TICK | slowest: %v, took: %v, target: %v, clients: %v",
+				peakTickSpeed,
+				timeTaken,
+				s.TickSpeed,
+				s.clientCount(),
+			)
+		}
 	}
+}
+
+func (s *GServer) snapshotClients() map[string]*GServerClient {
+	s.clientsMutex.RLock()
+	currentClients := make(map[string]*GServerClient, len(s.Clients))
+	maps.Copy(currentClients, s.Clients)
+	s.clientsMutex.RUnlock()
+	return currentClients
 }
 
 func (s *GServer) doTick() {
 	s.tick++
 
-	// Get snapshot of current clients using Mutex
-	s.clientsMutex.RLock()
-	currentClients := make(map[string]*GServerClient, len(s.Clients))
-	maps.Copy(currentClients, s.Clients)
-	s.clientsMutex.RUnlock()
+	// Handle connections and disconnections first
+	s.handleClientConnectionsAndDisconnections()
 
-	// Get copy of current game world state
-	oldState := s.WorldController.CloneWorld()
+	// Get snapshot of current clients
+	currentClients := s.snapshotClients()
 
 	// Do the game world tick
 	s.doGameWorldTick(currentClients)
 
-	// Generate diff to old state to send to clients
-	diff := s.WorldController.GenerateWorldDiff(oldState)
-
+	// Build diff from changes and send to clients
+	diff := s.WorldController.BuildWorldDiff()
 	err := s.relayWorldDiff(&diff, currentClients)
 	if err != nil {
 		log.Printf("Failed to relay world diff: %s", err)
@@ -181,8 +210,6 @@ func (s *GServer) relayWorldDiff(worldDiff *game.GameWorldDiff, currentClients m
 }
 
 func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {
-	s.handleClientConnectionsAndDisconnections()
-
 	// Do Client Actions
 	for clientID, client := range currentClients {
 		clientMessages := client.DrainMessages()
@@ -193,23 +220,53 @@ func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {
 	s.WorldController.DoTickers()
 }
 
+func (s *GServer) getClient(clientID string) *GServerClient {
+	s.clientsMutex.RLock()
+	defer s.clientsMutex.RUnlock()
+
+	return s.Clients[clientID]
+}
+
 func (s *GServer) handleClientConnectionsAndDisconnections() {
-	// Handle new connections
-	for _, clientID := range s.queuedConnections {
-		err := s.WorldController.SpawnNewPlayer(clientID)
+	s.clientsMutex.Lock()
+
+	connections := s.queuedConnections
+	disconnections := s.queuedDisconnections
+
+	s.queuedConnections = nil
+	s.queuedDisconnections = nil
+
+	s.clientsMutex.Unlock()
+
+	if len(connections) > 0 {
+		initialWorldStateMessage, err := s.buildInitialWorldStateMessage()
 		if err != nil {
-			s.removeClient(s.Clients[clientID])
+			log.Printf("Failed to build initial world state message - who knows what will happend: %s", err)
+		}
+
+		// Handle new connections
+		for _, clientID := range connections {
+
+			client := s.getClient(clientID)
+
+			if client == nil {
+				continue
+			}
+
+			err := s.WorldController.SpawnNewPlayer(clientID)
+			if err != nil {
+				s.removeClient(s.Clients[clientID])
+				continue
+			}
+
+			s.sendInitialWorldState(client, initialWorldStateMessage)
 		}
 	}
 
-	s.queuedConnections = s.queuedConnections[:0]
-
 	// Handle queuedDisconnections
-	for _, clientID := range s.queuedDisconnections {
+	for _, clientID := range disconnections {
 		s.WorldController.DeletePlayer(clientID)
 	}
-
-	s.queuedDisconnections = s.queuedDisconnections[:0]
 }
 
 // @TODO - need a better way to handle this. Too much logic in the server

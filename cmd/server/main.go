@@ -10,7 +10,7 @@ import (
 
 func main() {
 
-	server := server.NewGServer(time.Millisecond*600, 200, 200)
+	server := server.NewGServer(time.Millisecond*100, 200, 200)
 	http.HandleFunc("/ws", server.HandleClientConnection)
 	go server.GameLoop()
 
