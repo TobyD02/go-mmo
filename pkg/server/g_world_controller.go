@@ -32,8 +32,11 @@ func (wc *GWorldController) SetupWorld(
 				}
 			} else {
 				// Not on a wall, so spawn an interactable (sometimes)
-				if rand.IntN(100) == 1 {
-					wc.AddInteractable(game.NewGInteractable(x, y, game.TestItem))
+
+				if x != wc.GameWorld.SpawnPoint.X && y != wc.GameWorld.SpawnPoint.Y {
+					if rand.IntN(100) == 1 {
+						wc.AddInteractable(game.NewGInteractable(x, y, game.TestItem))
+					}
 				}
 			}
 		}
@@ -121,6 +124,10 @@ func (wc *GWorldController) AddInteractable(interactable *game.GInteractable) {
 	wc.GameWorld.Interactables[interactable.ID] = interactable
 }
 
+func (wc *GWorldController) SpawnNewPlayer(playerID string) error {
+	return wc.AddPlayer(playerID, wc.GameWorld.SpawnPoint.X, wc.GameWorld.SpawnPoint.Y)
+}
+
 func (wc *GWorldController) AddPlayer(playerID string, x, y int) error {
 	if wc.GameWorld.QueryMap(x, y) != game.TileWalkable {
 		return fmt.Errorf("Cannot add player")
@@ -170,7 +177,7 @@ func (wc *GWorldController) MovePlayer(playerID string, dx, dy int) {
 	player.Pos.X += dx
 	player.Pos.Y += dy
 
-	log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
+	// log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
 }
 
 func (wc *GWorldController) InteractWith(playerID string, interactableID string) {

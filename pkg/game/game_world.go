@@ -7,17 +7,7 @@ type GameWorld struct {
 	Interactables map[string]*GInteractable
 	Width         int
 	Height        int
-}
-
-type GameWorldDiff struct {
-	MapDiff           []GameWorldMapDiff        `json:"map_diff"`
-	PlayersDiff       map[string]*GPlayer       `json:"players_diff"`
-	InteractablesDiff map[string]*GInteractable `json:"interactables_diff"`
-}
-
-type GameWorldMapDiff struct {
-	Pos  Vec2          `json:"position"`
-	Tile GameWorldTile `json:"tile"`
+	SpawnPoint    Vec2
 }
 
 func NewGameWorld(width, height int) *GameWorld {
@@ -34,10 +24,11 @@ func NewGameWorld(width, height int) *GameWorld {
 		Players:       gamePlayers,
 		Interactables: gameInteractables,
 		Width:         width, Height: height,
+		SpawnPoint: Vec2{int(width / 2), int(height / 2)},
 	}
 }
 
-func (g *GameWorld) ApplyDiff(diff GameWorldDiff) {
+func (g *GameWorld) ApplyDiff(diff *GameWorldDiff) {
 	for _, mapDiff := range diff.MapDiff {
 		pos := mapDiff.Pos
 		tile := mapDiff.Tile

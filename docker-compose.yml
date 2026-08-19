@@ -1,3 +1,12 @@
+x-headless-client: &headless-client
+  depends_on:
+    server:
+      condition: "service_started"
+  image: mmo:latest
+  entrypoint: ["headless_client"]
+  environment:
+    G_SERVER: "ws://server:8080"
+
 services:
   server:
     build: .
@@ -5,3 +14,6 @@ services:
     entrypoint: ["server"]
     ports:
       - "8080:8080"
+
+  client1:
+    <<: *headless-client

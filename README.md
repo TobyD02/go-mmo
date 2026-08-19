@@ -1,5 +1,25 @@
 # Concept
 
+## Running client swarm
+
+1. Run server and build image
+
+```bash
+docker compose up --build -d
+
+```
+
+2. Run replicas clients
+
+```bash
+docker service create \
+  --name mmo-clients \
+  --replicas 100 \
+  --env G_SERVER=ws://host.docker.internal:8080 \
+  --entrypoint headless_client \
+  mmo:latest
+```
+
 ## TODO
 
 - [ ] Generate items - i.e. some database that is serialised

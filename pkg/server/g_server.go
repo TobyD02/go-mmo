@@ -10,23 +10,23 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/tobyd02/golang-mmo/pkg/game"
 	"github.com/tobyd02/golang-mmo/pkg/messages"
 )
 
-const ServerTickSpeed = time.Millisecond * 50
-
 type GServer struct {
-	Clients              map[string]*GClient
+	Clients              map[string]*GServerClient
 	WorldController      *GWorldController
 	clientsMutex         sync.RWMutex
 	queuedConnections    []string
 	queuedDisconnections []string
 	upgrader             websocket.Upgrader
+	TickSpeed            time.Duration
 	tick                 int
 }
 
-func NewGServer() *GServer {
-	clients := make(map[string]*GClient)
+func NewGServer(tickSpeed time.Duration, worldWidth int, worldHeight int) *GServer {
+	clients := make(map[string]*GServerClient)
 
 	server := &GServer{
 		Clients:              clients,
@@ -37,10 +37,11 @@ func NewGServer() *GServer {
 				return true
 			},
 		},
-		tick: 0,
+		tick:      0,
+		TickSpeed: tickSpeed,
 	}
 
-	worldController := NewGWorldController(100, 20, func() int {
+	worldController := NewGWorldController(worldWidth, worldHeight, func() int {
 		return server.tick
 	})
 	worldController.SetupWorld(true)
@@ -60,7 +61,7 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 
 	defer conn.Close()
 
-	client := NewGClient(conn)
+	client := NewGServerClient(conn)
 	err = client.EstablishConnection()
 	if err != nil {
 		log.Printf("failed to establish client connection: %s", err)
@@ -68,7 +69,7 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 	}
 
 	if _, exists := s.Clients[client.ID]; exists {
-		conn.WriteMessage(
+		client.WriteMessage(
 			websocket.TextMessage,
 			[]byte("Client already connected"),
 		)
@@ -80,15 +81,15 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 	s.clientsMutex.Lock()
 	s.Clients[client.ID] = client
 	s.queuedConnections = append(s.queuedConnections, client.ID)
+
 	s.clientsMutex.Unlock()
 
 	// Defer deletion on disconnect
 	defer s.removeClient(client)
 	s.handleNewActiveClientConnection(client)
-
 }
 
-func (s *GServer) handleNewActiveClientConnection(client *GClient) {
+func (s *GServer) handleNewActiveClientConnection(client *GServerClient) {
 	// First message is world state
 	serverInitialWorldStateMessage, err := messages.NewGServerInitialWorldStateMessage(s.WorldController.GameWorld)
 	if err != nil {
@@ -104,7 +105,7 @@ func (s *GServer) handleNewActiveClientConnection(client *GClient) {
 	}
 
 	// Send the inital message
-	client.Conn.WriteMessage(websocket.TextMessage, worldMsg)
+	client.WriteMessage(websocket.TextMessage, worldMsg)
 
 	// Initialise the ping loop (ensure client is connected)
 	go client.PingLoop()
@@ -116,7 +117,7 @@ func (s *GServer) handleNewActiveClientConnection(client *GClient) {
 	}
 }
 
-func (s *GServer) removeClient(client *GClient) {
+func (s *GServer) removeClient(client *GServerClient) {
 	s.clientsMutex.Lock()
 
 	delete(s.Clients, client.ID)
@@ -127,7 +128,7 @@ func (s *GServer) removeClient(client *GClient) {
 }
 
 func (s *GServer) GameLoop() {
-	ticker := time.NewTicker(ServerTickSpeed)
+	ticker := time.NewTicker(s.TickSpeed)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -138,9 +139,9 @@ func (s *GServer) GameLoop() {
 func (s *GServer) doTick() {
 	s.tick++
 
-	// Get copy of current clients using Mutex
+	// Get snapshot of current clients using Mutex
 	s.clientsMutex.RLock()
-	currentClients := make(map[string]*GClient, len(s.Clients))
+	currentClients := make(map[string]*GServerClient, len(s.Clients))
 	maps.Copy(currentClients, s.Clients)
 	s.clientsMutex.RUnlock()
 
@@ -152,20 +153,34 @@ func (s *GServer) doTick() {
 
 	// Generate diff to old state to send to clients
 	diff := s.WorldController.GenerateWorldDiff(oldState)
-	msg, err := json.Marshal(diff)
 
+	err := s.relayWorldDiff(&diff, currentClients)
 	if err != nil {
-		fmt.Printf("Failed to do tick: %s", err)
-		return
-	}
-
-	// Relay updates to clients
-	for _, client := range s.Clients {
-		client.Conn.WriteMessage(websocket.TextMessage, msg)
+		log.Printf("Failed to relay world diff: %s", err)
 	}
 }
 
-func (s *GServer) doGameWorldTick(currentClients map[string]*GClient) {
+func (s *GServer) relayWorldDiff(worldDiff *game.GameWorldDiff, currentClients map[string]*GServerClient) error {
+	msg, err := messages.NewGServerWorldDiffMessage(worldDiff)
+	if err != nil {
+		return fmt.Errorf("failed to generate world diff message")
+	}
+
+	payload, err := json.Marshal(msg)
+
+	if err != nil {
+		return fmt.Errorf("Failed to generate world diff message: %s", err)
+	}
+
+	// Relay updates to clients
+	for _, client := range currentClients {
+		client.WriteMessage(websocket.TextMessage, payload)
+	}
+
+	return nil
+}
+
+func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {
 	s.handleClientConnectionsAndDisconnections()
 
 	// Do Client Actions
@@ -181,7 +196,7 @@ func (s *GServer) doGameWorldTick(currentClients map[string]*GClient) {
 func (s *GServer) handleClientConnectionsAndDisconnections() {
 	// Handle new connections
 	for _, clientID := range s.queuedConnections {
-		err := s.WorldController.AddPlayer(clientID, 10, 5)
+		err := s.WorldController.SpawnNewPlayer(clientID)
 		if err != nil {
 			s.removeClient(s.Clients[clientID])
 		}

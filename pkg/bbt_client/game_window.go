@@ -5,20 +5,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/gorilla/websocket"
 
+	"github.com/tobyd02/golang-mmo/pkg/client"
 	"github.com/tobyd02/golang-mmo/pkg/game"
 )
 
 type GameModel struct {
-	gameWorld  *game.GameWorld
-	serverConn *ServerConnection
-	clientId   string
-}
-
-type WorldStateMsg map[string]struct {
-	X int `json:"x"`
-	Y int `json:"y"`
+	gameWorld *game.GameWorld
+	client    *client.GClient
 }
 
 type ConnectionErrorMsg struct {
@@ -27,18 +21,18 @@ type ConnectionErrorMsg struct {
 
 func InitialModel(
 	gameWorld *game.GameWorld,
-	conn *websocket.Conn,
-	clientId string,
+	client *client.GClient,
 ) GameModel {
 	return GameModel{
-		gameWorld:  gameWorld,
-		serverConn: NewServerConnection(conn),
-		clientId:   clientId,
+		gameWorld: gameWorld,
+		client:    client,
 	}
 }
 
 func (m GameModel) Init() tea.Cmd {
-	return m.serverConn.ReadGameWorldDiff()
+	teaCmd := BBTReadGameWorldDiff(m.client)
+
+	return teaCmd
 }
 
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -50,33 +44,33 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "up", "w":
-			return m, m.serverConn.SendMoveAction(0, -1)
+			return m, BBTSendMoveMessage(m.client, 0, -1)
 
 		case "down", "s":
-			return m, m.serverConn.SendMoveAction(0, 1)
+			return m, BBTSendMoveMessage(m.client, 0, 1)
 
 		case "left", "a":
-			return m, m.serverConn.SendMoveAction(-1, 0)
+			return m, BBTSendMoveMessage(m.client, -1, 0)
 
 		case "right", "d":
-			return m, m.serverConn.SendMoveAction(1, 0)
+			return m, BBTSendMoveMessage(m.client, 1, 0)
 
 		case "space":
-			self := m.gameWorld.Players[m.clientId]
+			self := m.gameWorld.Players[m.client.ClientID]
 			interactable := m.gameWorld.QueryInteractableAtPosition(self.Pos.X-1, self.Pos.Y)
 
 			if interactable != nil {
-				return m, m.serverConn.SendInteractAction(interactable.ID)
+				return m, BBTSendInteractMessage(m.client, interactable.ID)
 			}
 
 		}
 
-	case game.GameWorldDiff:
+	case *game.GameWorldDiff:
 		updateWorld(m.gameWorld, msg)
 
 		// IMPORTANT:
 		// Keep listening for the next server update.
-		return m, m.serverConn.ReadGameWorldDiff()
+		return m, BBTReadGameWorldDiff(m.client)
 
 	case ConnectionErrorMsg:
 		return m, tea.Quit
@@ -87,7 +81,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func updateWorld(
 	world *game.GameWorld,
-	diff game.GameWorldDiff,
+	diff *game.GameWorldDiff,
 ) {
 	world.ApplyDiff(diff)
 }
@@ -99,7 +93,7 @@ func (m GameModel) View() tea.View {
 	viewportWidth := 64
 	viewportHeight := 32
 
-	client := m.gameWorld.Players[m.clientId]
+	client := m.gameWorld.Players[m.client.ClientID]
 	if client == nil {
 		return tea.NewView("Loading...")
 	}
@@ -127,7 +121,7 @@ func (m GameModel) View() tea.View {
 			interactable := m.gameWorld.QueryInteractableAtPosition(x, y)
 
 			if len(players) > 0 {
-				if players[m.clientId] != nil {
+				if players[m.client.ClientID] != nil {
 					drawSelf(&world)
 				} else {
 					drawOther(&world)

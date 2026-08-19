@@ -3,13 +3,14 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/tobyd02/golang-mmo/pkg/server"
 )
 
 func main() {
 
-	server := server.NewGServer()
+	server := server.NewGServer(time.Millisecond*600, 200, 200)
 	http.HandleFunc("/ws", server.HandleClientConnection)
 	go server.GameLoop()
 

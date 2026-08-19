@@ -4,29 +4,31 @@ package server
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/tobyd02/golang-mmo/pkg/messages"
 )
 
-type GClient struct {
-	Messages chan []byte
-	Conn     *websocket.Conn
-	ID       string
+type GServerClient struct {
+	Messages   chan []byte
+	Conn       *websocket.Conn
+	writeMutex sync.Mutex
+	ID         string
 }
 
-func NewGClient(conn *websocket.Conn) *GClient {
+func NewGServerClient(conn *websocket.Conn) *GServerClient {
 	clientMessages := make(chan []byte, 100)
 
-	return &GClient{
-		clientMessages,
-		conn,
-		"",
+	return &GServerClient{
+		Messages: clientMessages,
+		Conn:     conn,
+		ID:       "",
 	}
 }
 
-func (c *GClient) EstablishConnection() error {
+func (c *GServerClient) EstablishConnection() error {
 	_, message, err := c.Conn.ReadMessage()
 
 	if err != nil {
@@ -48,7 +50,7 @@ func (c *GClient) EstablishConnection() error {
 	return nil
 }
 
-func (c *GClient) ReadMessages() error {
+func (c *GServerClient) ReadMessages() error {
 
 	c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 
@@ -68,7 +70,14 @@ func (c *GClient) ReadMessages() error {
 	}
 }
 
-func (c *GClient) PingLoop() {
+func (c *GServerClient) WriteMessage(messageType int, data []byte) error {
+	c.writeMutex.Lock()
+	defer c.writeMutex.Unlock()
+
+	return c.Conn.WriteMessage(messageType, data)
+}
+
+func (c *GServerClient) PingLoop() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -86,7 +95,7 @@ func (c *GClient) PingLoop() {
 	}
 }
 
-func (c *GClient) DrainMessages() map[messages.GMessageType]*messages.GMessage {
+func (c *GServerClient) DrainMessages() map[messages.GMessageType]*messages.GMessage {
 	msgs := make(map[messages.GMessageType]*messages.GMessage)
 
 drain:
