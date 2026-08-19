@@ -92,10 +92,11 @@ func updateWorld(
 }
 
 func (m GameModel) View() tea.View {
-	var b strings.Builder
+	var world strings.Builder
+	var log strings.Builder
 
 	viewportWidth := 64
-	viewportHeight := 48
+	viewportHeight := 32
 
 	client := m.gameWorld.Players[m.clientId]
 	if client == nil {
@@ -117,7 +118,7 @@ func (m GameModel) View() tea.View {
 			// Outside the world
 			if y < 0 || y >= m.gameWorld.Height ||
 				x < 0 || x >= m.gameWorld.Width {
-				b.WriteString("  ")
+				world.WriteString("  ")
 				continue
 			}
 
@@ -126,9 +127,9 @@ func (m GameModel) View() tea.View {
 
 			if len(players) > 0 {
 				if players[m.clientId] != nil {
-					b.WriteString("MM")
+					drawSelf(&world)
 				} else {
-					b.WriteString("@@")
+					drawOther(&world)
 				}
 
 				continue
@@ -136,18 +137,18 @@ func (m GameModel) View() tea.View {
 
 			if interactable != nil {
 				if interactable.CurrentTickCooldown <= 0 {
-					b.WriteString("II")
+					drawInteractable(&world)
 				} else {
-					b.WriteString("||")
+					drawInteractableCooldown(&world)
 				}
 				continue
 			}
 
-			b.WriteString(game.TileChars[m.gameWorld.Map[y][x]])
+			drawTile(&world, m.gameWorld.Map[y][x])
 		}
 
-		b.WriteString("\n")
+		world.WriteString("\n")
 	}
 
-	return tea.NewView(b.String())
+	return tea.NewView(worldStyle.Render(world.String()) + "\n" + logStyle.Render(log.String()))
 }

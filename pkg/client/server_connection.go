@@ -1,3 +1,4 @@
+// Package client - contains client specific logic
 package client
 
 import (
@@ -25,9 +26,9 @@ func (s *ServerConnection) SendMoveAction(dx, dy int) tea.Cmd {
 	}
 }
 
-func (s *ServerConnection) SendInteractAction(interactableId string) tea.Cmd {
+func (s *ServerConnection) SendInteractAction(interactableID string) tea.Cmd {
 	return func() tea.Msg {
-		return s.sendMessage(messages.NewGClientInteractMessage(interactableId))
+		return s.sendMessage(messages.NewGClientInteractMessage(interactableID))
 	}
 }
 
