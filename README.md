@@ -20,6 +20,16 @@ docker service create \
   mmo:latest
 ```
 
+3. Commands:
+
+```
+# Scale (increase or decrease number of mock clients)
+docker service scale mmo-clients:{{ number_of_clients }}
+
+# Delete the clients
+docker service rm mmo-clients
+```
+
 ## TODO
 
 - [ ] Generate items - i.e. some database that is serialised
