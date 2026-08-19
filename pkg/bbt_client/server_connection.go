@@ -1,11 +1,12 @@
-package client
+// Package client - contains client specific logic
+package bbt_client
 
 import (
 	"encoding/json"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/gorilla/websocket"
-	game "github.com/tobyd02/golang-mmo/pkg/game_common"
+	"github.com/tobyd02/golang-mmo/pkg/game"
 	"github.com/tobyd02/golang-mmo/pkg/messages"
 )
 
@@ -25,9 +26,9 @@ func (s *ServerConnection) SendMoveAction(dx, dy int) tea.Cmd {
 	}
 }
 
-func (s *ServerConnection) SendInteractAction(interactableId string) tea.Cmd {
+func (s *ServerConnection) SendInteractAction(interactableID string) tea.Cmd {
 	return func() tea.Msg {
-		return s.sendMessage(messages.NewGClientInteractMessage(interactableId))
+		return s.sendMessage(messages.NewGClientInteractMessage(interactableID))
 	}
 }
 

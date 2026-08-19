@@ -6,8 +6,3 @@ const (
 	TileWalkable GameWorldTile = iota
 	TileWall
 )
-
-var TileChars = map[GameWorldTile]string{
-	TileWalkable: "..",
-	TileWall:     "██",
-}

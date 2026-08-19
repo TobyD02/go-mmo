@@ -1,12 +1,13 @@
-package client
+package bbt_client
 
 import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/gorilla/websocket"
 
-	game "github.com/tobyd02/golang-mmo/pkg/game_common"
+	"github.com/tobyd02/golang-mmo/pkg/game"
 )
 
 type GameModel struct {
@@ -62,7 +63,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "space":
 			self := m.gameWorld.Players[m.clientId]
-			interactable := m.gameWorld.Clone().QueryInteractableAtPosition(self.Pos.X-1, self.Pos.Y)
+			interactable := m.gameWorld.QueryInteractableAtPosition(self.Pos.X-1, self.Pos.Y)
 
 			if interactable != nil {
 				return m, m.serverConn.SendInteractAction(interactable.ID)
@@ -92,10 +93,11 @@ func updateWorld(
 }
 
 func (m GameModel) View() tea.View {
-	var b strings.Builder
+	var world strings.Builder
+	var log strings.Builder
 
 	viewportWidth := 64
-	viewportHeight := 48
+	viewportHeight := 32
 
 	client := m.gameWorld.Players[m.clientId]
 	if client == nil {
@@ -117,7 +119,7 @@ func (m GameModel) View() tea.View {
 			// Outside the world
 			if y < 0 || y >= m.gameWorld.Height ||
 				x < 0 || x >= m.gameWorld.Width {
-				b.WriteString("  ")
+				world.WriteString("  ")
 				continue
 			}
 
@@ -126,9 +128,9 @@ func (m GameModel) View() tea.View {
 
 			if len(players) > 0 {
 				if players[m.clientId] != nil {
-					b.WriteString("MM")
+					drawSelf(&world)
 				} else {
-					b.WriteString("@@")
+					drawOther(&world)
 				}
 
 				continue
@@ -136,18 +138,28 @@ func (m GameModel) View() tea.View {
 
 			if interactable != nil {
 				if interactable.CurrentTickCooldown <= 0 {
-					b.WriteString("II")
+					drawInteractable(&world)
 				} else {
-					b.WriteString("||")
+					drawInteractableCooldown(&world)
 				}
 				continue
 			}
 
-			b.WriteString(game.TileChars[m.gameWorld.Map[y][x]])
+			drawTile(&world, m.gameWorld.Map[y][x])
 		}
 
-		b.WriteString("\n")
+		world.WriteString("\n")
 	}
 
-	return tea.NewView(b.String())
+	worldContent := worldStyle.Render(world.String())
+	logContent := logStyle.Render(log.String())
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
+		worldContent,
+		logContent,
+	)
+
+	return tea.NewView(gameStyle.Render(content))
+
+	// return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, worldStyle.Render(world.String())+"\n"+logStyle.Render(log.String())))
 }

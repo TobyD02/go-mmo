@@ -86,8 +86,8 @@ func (c *GClient) PingLoop() {
 	}
 }
 
-func (c *GClient) DrainMessages() []*messages.GMessage {
-	var msgs []*messages.GMessage
+func (c *GClient) DrainMessages() map[messages.GMessageType]*messages.GMessage {
+	msgs := make(map[messages.GMessageType]*messages.GMessage)
 
 drain:
 	for {
@@ -100,7 +100,7 @@ drain:
 				break
 			}
 
-			msgs = append(msgs, message)
+			msgs[message.Type] = message
 		default:
 			break drain
 		}
