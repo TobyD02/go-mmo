@@ -1,4 +1,4 @@
-// Package client - contains client specific logic
+// Package bbt_client - contains client specific logic
 package bbt_client
 
 import (
