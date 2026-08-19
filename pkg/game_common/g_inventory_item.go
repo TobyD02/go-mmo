@@ -1,4 +1,4 @@
-package game
+package game_common
 
 type GInventoryItem struct {
 	Item     *GItem `json:"item"`

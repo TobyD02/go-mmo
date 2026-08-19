@@ -1,4 +1,4 @@
-package game
+package game_common
 
 import "math"
 

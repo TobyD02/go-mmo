@@ -1,5 +1,5 @@
 // Package client - contains client specific logic
-package client
+package bbt_client
 
 import (
 	"encoding/json"

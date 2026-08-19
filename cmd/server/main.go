@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	game "github.com/tobyd02/golang-mmo/pkg/game_common"
+	"github.com/tobyd02/golang-mmo/pkg/game_common"
 	"github.com/tobyd02/golang-mmo/pkg/messages"
 	"github.com/tobyd02/golang-mmo/pkg/server"
 )
@@ -26,22 +26,22 @@ var upgrader = websocket.Upgrader{
 
 var clients = make(map[string]*server.GClient)
 var clientsMutex sync.RWMutex
-var gameWorld *game.GameWorld
+var gameWorld *game_common.GameWorld
 
 var queuedConnections = make([]string, 0)
 var queuedDisconnections = make([]string, 0)
 
 func main() {
-	gameWorld = game.NewGameWorld(100, 20)
+	gameWorld = game_common.NewGameWorld(100, 20)
 
 	for y, row := range gameWorld.Map {
 		for x := range row {
-			if gameWorld.Map[y][x] != game.TileWalkable {
+			if gameWorld.Map[y][x] != game_common.TileWalkable {
 				continue
 			}
 
 			if rand.IntN(20) == 1 {
-				gameWorld.AddInteractable(game.NewGInteractable(x, y, game.TestItem))
+				gameWorld.AddInteractable(game_common.NewGInteractable(x, y, game_common.TestItem))
 			}
 		}
 	}
@@ -179,7 +179,7 @@ func doTick() {
 	newGameWorld.DoTickers()
 
 	// Generate diff that can be sent to clients
-	diff := game.GenerateDiff(gameWorld, newGameWorld)
+	diff := game_common.GenerateDiff(gameWorld, newGameWorld)
 	msg, err := json.Marshal(diff)
 
 	// -------------------------
@@ -197,7 +197,7 @@ func doTick() {
 	gameWorld = newGameWorld
 }
 
-func handleMessages(clientID string, msgs []*messages.GMessage, newGameWorld *game.GameWorld) {
+func handleMessages(clientID string, msgs []*messages.GMessage, newGameWorld *game_common.GameWorld) {
 	dx, dy := 0, 0
 
 	// if len(msgs) > 0 {

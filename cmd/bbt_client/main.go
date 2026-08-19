@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/tobyd02/golang-mmo/pkg/client"
+	"github.com/tobyd02/golang-mmo/pkg/bbt_client"
 	"github.com/tobyd02/golang-mmo/pkg/messages"
 )
 
@@ -52,7 +52,7 @@ func main() {
 
 	world := parsedData.InitialWorldState
 
-	model := client.InitialModel(world, conn, clientId)
+	model := bbt_client.InitialModel(world, conn, clientId)
 
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		log.Fatal(err)

@@ -1,4 +1,4 @@
-package client
+package bbt_client
 
 import (
 	"strings"

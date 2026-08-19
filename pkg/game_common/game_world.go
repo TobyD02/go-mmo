@@ -1,5 +1,5 @@
 // Package game - global module for game logic
-package game
+package game_common
 
 import (
 	"fmt"
