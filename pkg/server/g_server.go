@@ -13,7 +13,7 @@ import (
 	"github.com/tobyd02/golang-mmo/pkg/messages"
 )
 
-const ServerTickSpeed = time.Millisecond * 20
+const ServerTickSpeed = time.Millisecond * 50
 
 type GServer struct {
 	Clients              map[string]*GClient
@@ -22,18 +22,14 @@ type GServer struct {
 	queuedConnections    []string
 	queuedDisconnections []string
 	upgrader             websocket.Upgrader
+	tick                 int
 }
 
 func NewGServer() *GServer {
-
-	worldController := NewGWorldController(100, 20)
-	worldController.SetupWorld(true)
-
 	clients := make(map[string]*GClient)
 
-	return &GServer{
+	server := &GServer{
 		Clients:              clients,
-		WorldController:      worldController,
 		queuedConnections:    make([]string, 0),
 		queuedDisconnections: make([]string, 0),
 		upgrader: websocket.Upgrader{
@@ -41,8 +37,16 @@ func NewGServer() *GServer {
 				return true
 			},
 		},
+		tick: 0,
 	}
 
+	worldController := NewGWorldController(100, 20, func() int {
+		return server.tick
+	})
+	worldController.SetupWorld(true)
+
+	server.WorldController = worldController
+	return server
 }
 
 func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request) {
@@ -132,6 +136,8 @@ func (s *GServer) GameLoop() {
 }
 
 func (s *GServer) doTick() {
+	s.tick++
+
 	// Get copy of current clients using Mutex
 	s.clientsMutex.RLock()
 	currentClients := make(map[string]*GClient, len(s.Clients))
@@ -168,7 +174,7 @@ func (s *GServer) doGameWorldTick(currentClients map[string]*GClient) {
 		s.handleMessages(clientID, clientMessages) // Client actions affect new game world
 	}
 
-	// Do tickers before generating diff
+	// Run tickers last
 	s.WorldController.DoTickers()
 }
 

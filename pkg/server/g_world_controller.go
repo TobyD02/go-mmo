@@ -10,12 +10,14 @@ import (
 )
 
 type GWorldController struct {
-	GameWorld *game.GameWorld
+	GameWorld     *game.GameWorld
+	getServerTick func() int
 }
 
-func NewGWorldController(worldWidth, worldHeight int) *GWorldController {
+func NewGWorldController(worldWidth, worldHeight int, getTicker func() int) *GWorldController {
 	return &GWorldController{
-		GameWorld: game.NewGameWorld(worldWidth, worldHeight),
+		GameWorld:     game.NewGameWorld(worldWidth, worldHeight),
+		getServerTick: getTicker,
 	}
 }
 
@@ -171,36 +173,20 @@ func (wc *GWorldController) MovePlayer(playerID string, dx, dy int) {
 	log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
 }
 
-func (wc *GWorldController) InteractWith(playerId string, interactableId string) {
-	player := wc.GameWorld.Players[playerId]
-	interactable := wc.GameWorld.Interactables[interactableId]
+func (wc *GWorldController) InteractWith(playerID string, interactableID string) {
+	player := wc.GameWorld.Players[playerID]
+	interactable := wc.GameWorld.Interactables[interactableID]
 
-	if player.Pos.Distance(interactable.Pos) > 1 {
-		return // Cannot
+	if !interactable.PlayerCanOccupyOrWork(player) {
+		return
 	}
 
-	if interactable.CurrentTickCooldown != 0 {
-		return // Interactable is on cooldown
-	}
+	interactable.DoWork(wc.getServerTick())
+	if interactable.WorkIsDone() {
+		yield, yieldAmount := interactable.GetYieldAndTriggerCooldown()
+		player.AddToInventory(yield, yieldAmount)
 
-	if interactable.OccupiedBy == "" {
-		interactable.OccupiedBy = playerId
-	} else if interactable.OccupiedBy != playerId {
-		return // Cannot - occupied by someone else
-	}
-
-	log.Printf("WORLD | %s interacted with %s", playerId, interactableId)
-
-	interactable.CurrentTicksWorked++
-	if interactable.CurrentTicksWorked >= interactable.TickWorkForYield {
-		interactable.CurrentTickCooldown = interactable.MaxTickCooldown
-
-		yieldAmount := rand.IntN(interactable.YieldAmountMax-interactable.YieldAmountMin) + interactable.YieldAmountMin
-
-		player.AddToInventory(&interactable.Yield, yieldAmount)
-		// log.Printf("WORLD | %s %v yielded %s from %s", playerId, yieldAmount, interactable.Yield.Name, interactableId)
-
-		log.Printf("WORLD | Player %s inventory: %v", playerId, player.Inventory)
+		log.Printf("WORLD | Player %s inventory: %v", playerID, player.Inventory)
 
 		for _, i := range player.Inventory {
 			log.Printf("\t ITEM | %s | %v", i.Item.Name, i.Quantity)
@@ -209,7 +195,20 @@ func (wc *GWorldController) InteractWith(playerId string, interactableId string)
 }
 
 func (wc *GWorldController) DoTickers() {
+	// @todo - need to tick occupancy as well.
+	// - if occupant hasn't worked this tick, it should be cleared
+
 	for _, interactable := range wc.GameWorld.Interactables {
+
+		// If its occupied and hasn't been worked this tick
+		if interactable.IsOccupied() && !interactable.DidWorkThisTick(wc.getServerTick()) {
+			if interactable.OccupantCooldown <= 0 {
+				interactable.ClearOccupant()
+			} else {
+				interactable.OccupantCooldown--
+			}
+		}
+
 		if interactable.CurrentTickCooldown <= 0 {
 			continue
 		}
