@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	game "github.com/tobyd02/golang-mmo/pkg/game_common"
+	"github.com/tobyd02/golang-mmo/pkg/game"
 )
 
 var TileChars = map[game.GameWorldTile]string{
@@ -29,8 +29,9 @@ var otherStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#9c7d36")).Bold(
 var interactableStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#74bce3")).Bold(true)
 var interactableCooldownStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#1a3847")).Bold(true)
 
-var worldStyle = lipgloss.NewStyle().Width(128).Height(32)
-var logStyle = lipgloss.NewStyle().Width(128).Height(12).Border(lipgloss.NormalBorder())
+var gameStyle = lipgloss.NewStyle().Width(128).Height(40).Border(lipgloss.NormalBorder())
+var worldStyle = lipgloss.NewStyle().Width(128).Height(28)
+var logStyle = lipgloss.NewStyle().Width(128).Height(12).Border(lipgloss.NormalBorder(), true, false, false, false)
 
 func drawTile(b *strings.Builder, tile game.GameWorldTile) {
 	b.WriteString(TileStyles[tile].Render(TileChars[tile]))

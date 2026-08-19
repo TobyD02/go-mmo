@@ -4,9 +4,10 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/gorilla/websocket"
 
-	game "github.com/tobyd02/golang-mmo/pkg/game_common"
+	"github.com/tobyd02/golang-mmo/pkg/game"
 )
 
 type GameModel struct {
@@ -62,7 +63,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "space":
 			self := m.gameWorld.Players[m.clientId]
-			interactable := m.gameWorld.Clone().QueryInteractableAtPosition(self.Pos.X-1, self.Pos.Y)
+			interactable := m.gameWorld.QueryInteractableAtPosition(self.Pos.X-1, self.Pos.Y)
 
 			if interactable != nil {
 				return m, m.serverConn.SendInteractAction(interactable.ID)
@@ -150,5 +151,15 @@ func (m GameModel) View() tea.View {
 		world.WriteString("\n")
 	}
 
-	return tea.NewView(worldStyle.Render(world.String()) + "\n" + logStyle.Render(log.String()))
+	worldContent := worldStyle.Render(world.String())
+	logContent := logStyle.Render(log.String())
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
+		worldContent,
+		logContent,
+	)
+
+	return tea.NewView(gameStyle.Render(content))
+
+	// return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, worldStyle.Render(world.String())+"\n"+logStyle.Render(log.String())))
 }

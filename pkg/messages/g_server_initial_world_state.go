@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	game "github.com/tobyd02/golang-mmo/pkg/game_common"
+	"github.com/tobyd02/golang-mmo/pkg/game"
 )
 
 type GServerInitialWorldStateMessage struct {

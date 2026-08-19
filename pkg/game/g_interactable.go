@@ -1,5 +1,4 @@
-// Package game_common - Common game logic shared between client and server
-package game_common
+package game
 
 import (
 	"math/rand/v2"
