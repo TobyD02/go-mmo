@@ -12,19 +12,55 @@ import (
 )
 
 type GServerClient struct {
-	Messages   chan []byte
-	Conn       *websocket.Conn
-	writeMutex sync.Mutex
-	ID         string
+	InboundMessages  chan []byte
+	OutboundMessages chan []byte
+
+	Conn *websocket.Conn
+	ID   string
+
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 func NewGServerClient(conn *websocket.Conn) *GServerClient {
-	clientMessages := make(chan []byte, 100)
-
 	return &GServerClient{
-		Messages: clientMessages,
-		Conn:     conn,
-		ID:       "",
+		InboundMessages:  make(chan []byte, 100),
+		OutboundMessages: make(chan []byte, 100),
+		Conn:             conn,
+		ID:               "",
+		done:             make(chan struct{}),
+	}
+}
+
+func (c *GServerClient) Close() {
+	c.closeOnce.Do(func() {
+		close(c.done)
+		c.Conn.Close()
+	})
+}
+
+func (c *GServerClient) WriteLoop() {
+	for {
+		select {
+		case message := <-c.OutboundMessages:
+			err := c.Conn.WriteMessage(
+				websocket.TextMessage,
+				message,
+			)
+
+			if err != nil {
+				log.Printf(
+					"failed to write to client %s: %s",
+					c.ID,
+					err,
+				)
+
+				return
+			}
+
+		case <-c.done:
+			return
+		}
 	}
 }
 
@@ -32,64 +68,104 @@ func (c *GServerClient) EstablishConnection() error {
 	_, message, err := c.Conn.ReadMessage()
 
 	if err != nil {
-		return fmt.Errorf("failed to read connection message: %s", err)
+		return fmt.Errorf(
+			"failed to read connection message: %s",
+			err,
+		)
 	}
 
 	clientConnectionMessage, err := messages.ParseMessage(message)
 
-	if err != nil || clientConnectionMessage.Type != messages.TClientConnectedMessage {
-		return fmt.Errorf("invalid connection message: %s", err)
+	if err != nil ||
+		clientConnectionMessage.Type != messages.TClientConnectedMessage {
+		return fmt.Errorf(
+			"invalid connection message: %s",
+			err,
+		)
 	}
 
-	connectionData, err := messages.ParseGClientConnectedData(clientConnectionMessage.Data)
+	connectionData, err := messages.ParseGClientConnectedData(
+		clientConnectionMessage.Data,
+	)
+
 	if err != nil {
-		return fmt.Errorf("invalid connection message: %s", err)
+		return fmt.Errorf(
+			"invalid connection message: %s",
+			err,
+		)
 	}
 
 	c.ID = connectionData.ID
+
 	return nil
 }
 
-func (c *GServerClient) ReadMessages() error {
-
-	c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+func (c *GServerClient) ReadLoop() error {
+	c.Conn.SetReadDeadline(
+		time.Now().Add(10 * time.Second),
+	)
 
 	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(time.Second * 10))
+		c.Conn.SetReadDeadline(
+			time.Now().Add(10 * time.Second),
+		)
+
 		return nil
 	})
 
 	for {
 		_, message, err := c.Conn.ReadMessage()
+
 		if err != nil {
-			log.Println("client disconnected:", err)
+			log.Println(
+				"client disconnected:",
+				err,
+			)
+
 			return err
 		}
 
-		c.Messages <- message
+		select {
+		case c.InboundMessages <- message:
+
+		case <-c.done:
+			return nil
+		}
 	}
 }
 
-func (c *GServerClient) WriteMessage(messageType int, data []byte) error {
-	c.writeMutex.Lock()
-	defer c.writeMutex.Unlock()
-
-	return c.Conn.WriteMessage(messageType, data)
+func (c *GServerClient) WriteMessage(data []byte) {
+	select {
+	case c.OutboundMessages <- data:
+	case <-c.done:
+	default:
+		fmt.Println("overflowed outbound messages", len(c.OutboundMessages))
+	}
 }
 
 func (c *GServerClient) PingLoop() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		err := c.Conn.WriteControl(
-			websocket.PingMessage,
-			nil,
-			time.Now().Add(time.Second),
-		)
+	for {
+		select {
+		case <-ticker.C:
+			err := c.Conn.WriteControl(
+				websocket.PingMessage,
+				nil,
+				time.Now().Add(time.Second),
+			)
 
-		if err != nil {
-			log.Println("client ping failed:", c.ID)
+			if err != nil {
+				log.Println(
+					"client ping failed:",
+					c.ID,
+				)
+
+				return
+			}
+
+		case <-c.done:
 			return
 		}
 	}
@@ -101,19 +177,23 @@ func (c *GServerClient) DrainMessages() map[messages.GMessageType]*messages.GMes
 drain:
 	for {
 		select {
-		case a := <-c.Messages:
-			message, err := messages.ParseMessage(a)
+		case rawMessage := <-c.InboundMessages:
+			message, err := messages.ParseMessage(rawMessage)
 
 			if err != nil {
-				log.Printf("failed to decode client action: %s", err)
-				break
+				log.Printf(
+					"failed to decode client action: %s",
+					err,
+				)
+
+				continue
 			}
 
 			msgs[message.Type] = message
+
 		default:
 			break drain
 		}
-
 	}
 
 	return msgs

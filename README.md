@@ -14,7 +14,7 @@ docker compose up --build -d
 ```bash
 docker service create \
   --name mmo-clients \
-  --replicas 500 \
+  --replicas 100 \
   --env G_SERVER=ws://host.docker.internal:8080 \
   --entrypoint headless_client \
   mmo:latest

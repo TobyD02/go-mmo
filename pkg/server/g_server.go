@@ -59,12 +59,12 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	defer conn.Close()
-
 	client := NewGServerClient(conn)
 	err = client.EstablishConnection()
 	if err != nil {
 		log.Printf("failed to establish client connection: %s", err)
+
+		client.Close()
 		return
 	}
 
@@ -72,10 +72,9 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 
 	if _, exists := s.Clients[client.ID]; exists {
 		s.clientsMutex.Unlock()
-		client.WriteMessage(
-			websocket.TextMessage,
-			[]byte("Client already connected"),
-		)
+
+		log.Printf("client already connected: %s", client.ID)
+
 		return
 	}
 
@@ -89,13 +88,14 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 	// Defer deletion on disconnect
 	defer s.removeClient(client)
 
-	// Initialise the ping loop (ensure client is connected)
+	// Initialise the ping loop (ensure client is connected) and write loop (for outbound messages)
+	go client.WriteLoop()
 	go client.PingLoop()
 	// log.Println("client connected: ", client.ID)
 
-	err = client.ReadMessages()
+	err = client.ReadLoop()
 	if err != nil {
-		// fmt.Printf("client disconnected %s", client.ID)
+		fmt.Printf("client disconnected %s", client.ID)
 	}
 }
 
@@ -103,7 +103,7 @@ func (s *GServer) buildInitialWorldStateMessage() ([]byte, error) {
 	// First message is world state
 	serverInitialWorldStateMessage, err := messages.NewGServerInitialWorldStateMessage(s.WorldController.GameWorld)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get initial world state")
+		return nil, fmt.Errorf("failed to get initial world state")
 	}
 
 	// Marshal the message
@@ -112,10 +112,7 @@ func (s *GServer) buildInitialWorldStateMessage() ([]byte, error) {
 
 func (s *GServer) sendInitialWorldState(client *GServerClient, initialWorldStateMessage []byte) {
 	// Send the inital message
-	err := client.WriteMessage(websocket.TextMessage, initialWorldStateMessage)
-	if err != nil {
-		log.Printf("Failed to send initial world state")
-	}
+	client.WriteMessage(initialWorldStateMessage)
 }
 
 func (s *GServer) removeClient(client *GServerClient) {
@@ -125,7 +122,7 @@ func (s *GServer) removeClient(client *GServerClient) {
 	s.queuedDisconnections = append(s.queuedDisconnections, client.ID)
 	s.clientsMutex.Unlock()
 
-	client.Conn.Close()
+	client.Close()
 }
 
 func (s *GServer) clientCount() int {
@@ -149,15 +146,13 @@ func (s *GServer) GameLoop() {
 		if timeTaken > peakTickSpeed {
 			peakTickSpeed = timeTaken
 		}
-		if timeTaken >= time.Millisecond*5 {
-			log.Printf(
-				"TICK | slowest: %v, took: %v, target: %v, clients: %v",
-				peakTickSpeed,
-				timeTaken,
-				s.TickSpeed,
-				s.clientCount(),
-			)
-		}
+		// log.Printf(
+		// 	"TICK | slowest: %v, took: %v, target: %v, clients: %v",
+		// 	peakTickSpeed,
+		// 	timeTaken,
+		// 	s.TickSpeed,
+		// 	s.clientCount(),
+		// )
 	}
 }
 
@@ -198,12 +193,12 @@ func (s *GServer) relayWorldDiff(worldDiff *game.GameWorldDiff, currentClients m
 	payload, err := json.Marshal(msg)
 
 	if err != nil {
-		return fmt.Errorf("Failed to generate world diff message: %s", err)
+		return fmt.Errorf("failed to generate world diff message: %s", err)
 	}
 
 	// Relay updates to clients
 	for _, client := range currentClients {
-		client.WriteMessage(websocket.TextMessage, payload)
+		client.WriteMessage(payload)
 	}
 
 	return nil
