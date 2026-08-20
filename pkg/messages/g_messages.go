@@ -19,6 +19,7 @@ const (
 	TClientInteractMessage
 	TServerInitialWorldStateMessage
 	TServerWorldDiffMessage
+	TServerLogMessage
 )
 
 type GMessageData interface {

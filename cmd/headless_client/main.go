@@ -4,6 +4,7 @@ import (
 	"log"
 	"math/rand/v2"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tobyd02/golang-mmo/pkg/client"
@@ -45,13 +46,20 @@ func main() {
 
 	log.Println("Waiting for world diffs...")
 
-	for {
+	// client ticker
+
+	ticker := time.NewTicker(client.GClientTickSpeed)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		c.Update() // Called first
+
 		diff, err := c.ReadGameWorldDiff()
 		if err != nil {
 			log.Fatalf("Failed reading world diff: %v", err)
 		}
 
-		if !diff.IsEmpty() {
+		if diff != nil && !diff.IsEmpty() {
 			log.Printf(
 				"Received world diff: %+v",
 				diff,

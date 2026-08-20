@@ -42,7 +42,11 @@ func (c *GServerClient) Close() {
 func (c *GServerClient) WriteLoop() {
 	for {
 		select {
-		case message := <-c.OutboundMessages:
+		case message, ok := <-c.OutboundMessages:
+			if !ok {
+				return
+			}
+
 			err := c.Conn.WriteMessage(
 				messages.GWebsocketMessageType,
 				message,

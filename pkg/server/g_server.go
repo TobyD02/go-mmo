@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/tobyd02/golang-mmo/pkg/game"
 	"github.com/tobyd02/golang-mmo/pkg/messages"
 )
 
@@ -23,6 +22,8 @@ type GServer struct {
 	upgrader             websocket.Upgrader
 	TickSpeed            time.Duration
 	tick                 int
+
+	MessageRouter *GMessageRouter
 }
 
 func NewGServer(tickSpeed time.Duration, worldWidth int, worldHeight int) *GServer {
@@ -37,13 +38,21 @@ func NewGServer(tickSpeed time.Duration, worldWidth int, worldHeight int) *GServ
 				return true
 			},
 		},
-		tick:      0,
-		TickSpeed: tickSpeed,
+		tick:          0,
+		TickSpeed:     tickSpeed,
+		MessageRouter: NewGMessageRouter(),
 	}
 
-	worldController := NewGWorldController(worldWidth, worldHeight, func() int {
-		return server.tick
-	})
+	worldController := NewGWorldController(
+		worldWidth,
+		worldHeight,
+		func() int {
+			return server.tick
+		},
+		func() *GMessageRouter {
+			return server.MessageRouter
+		},
+	)
 	worldController.SetupWorld(true)
 
 	server.WorldController = worldController
@@ -178,37 +187,19 @@ func (s *GServer) doTick() {
 
 	// Build diff from changes and send to clients
 	diff := s.WorldController.BuildWorldDiff()
-	err := s.relayWorldDiff(&diff, currentClients)
+	err := s.MessageRouter.PushWorldDiffMessage(&diff)
 	if err != nil {
-		log.Printf("Failed to relay world diff: %s", err)
-	}
-}
-
-func (s *GServer) relayWorldDiff(worldDiff *game.GameWorldDiff, currentClients map[string]*GServerClient) error {
-	msg, err := messages.NewGServerWorldDiffMessage(worldDiff)
-	if err != nil {
-		return fmt.Errorf("failed to generate world diff message")
+		log.Printf("Failed to push world diff message: %s", err)
 	}
 
-	payload, err := json.Marshal(msg)
-
-	if err != nil {
-		return fmt.Errorf("failed to generate world diff message: %s", err)
-	}
-
-	// Relay updates to clients
-	for _, client := range currentClients {
-		client.WriteMessage(payload)
-	}
-
-	return nil
+	s.MessageRouter.Flush(currentClients)
 }
 
 func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {
 	// Do Client Actions
-	for clientID, client := range currentClients {
+	for _, client := range currentClients {
 		clientMessages := client.DrainMessages()
-		s.handleMessages(clientID, clientMessages) // Client actions affect new game world
+		s.handleMessages(client, clientMessages) // Client actions affect new game world
 	}
 
 	// Run tickers last
@@ -255,12 +246,14 @@ func (s *GServer) handleClientConnectionsAndDisconnections() {
 			}
 
 			s.sendInitialWorldState(client, initialWorldStateMessage)
+			s.MessageRouter.PushGlobalLogMessage("GLOBAL", fmt.Sprintf("Player %s joined", clientID))
 		}
 	}
 
 	// Handle queuedDisconnections
 	for _, clientID := range disconnections {
 		s.WorldController.DeletePlayer(clientID)
+		s.MessageRouter.PushGlobalLogMessage("GLOBAL", fmt.Sprintf("Player %s disconnected", clientID))
 	}
 }
 
@@ -268,7 +261,7 @@ func (s *GServer) handleClientConnectionsAndDisconnections() {
 // Maybe some message processor - Cannot modify the world directly because i need to account for state?
 // Or just process the messages - when collecting only one of each message type (the latest) can be used
 func (s *GServer) handleMessages(
-	clientID string,
+	client *GServerClient,
 	msgs map[messages.GMessageType]*messages.GMessage,
 ) {
 	for messageType, message := range msgs {
@@ -280,7 +273,7 @@ func (s *GServer) handleMessages(
 				log.Printf("error: failed to parse move data")
 			}
 
-			s.WorldController.MovePlayer(clientID, moveData.Dx, moveData.Dy)
+			s.WorldController.MovePlayer(client, moveData.Dx, moveData.Dy)
 
 		case messages.TClientInteractMessage:
 			interactData, err := messages.ParseGClientInteractMessageData(message.Data)
@@ -288,7 +281,7 @@ func (s *GServer) handleMessages(
 				log.Printf("error: failed to parse move data")
 			}
 
-			s.WorldController.InteractWith(clientID, interactData.InteractableID)
+			s.WorldController.InteractWith(client, interactData.InteractableID)
 		}
 
 	}

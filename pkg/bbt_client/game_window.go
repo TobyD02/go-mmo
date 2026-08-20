@@ -1,7 +1,9 @@
 package bbt_client
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
@@ -19,6 +21,8 @@ type ConnectionErrorMsg struct {
 	Err error
 }
 
+type GameTickMsg struct{}
+
 func InitialModel(
 	gameWorld *game.GameWorld,
 	client *client.GClient,
@@ -29,14 +33,39 @@ func InitialModel(
 	}
 }
 
-func (m GameModel) Init() tea.Cmd {
-	teaCmd := BBTReadGameWorldDiff(m.client)
+func tick() tea.Cmd {
+	return tea.Tick(
+		client.GClientTickSpeed,
+		func(time.Time) tea.Msg {
+			return GameTickMsg{}
+		},
+	)
+}
 
-	return teaCmd
+func (m GameModel) Init() tea.Cmd {
+	return tick()
 }
 
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
+	case GameTickMsg:
+		m.client.Update()
+
+		diff, err := m.client.ReadGameWorldDiff()
+		if err != nil {
+			return m, func() tea.Msg {
+				return ConnectionErrorMsg{Err: err}
+			}
+		}
+
+		if diff != nil {
+			updateWorld(m.gameWorld, diff)
+		}
+
+		_ = m.client.ProcessServerLogMessages()
+
+		return m, tick()
 
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -64,13 +93,6 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		}
-
-	case *game.GameWorldDiff:
-		updateWorld(m.gameWorld, msg)
-
-		// IMPORTANT:
-		// Keep listening for the next server update.
-		return m, BBTReadGameWorldDiff(m.client)
 
 	case ConnectionErrorMsg:
 		return m, tea.Quit
@@ -143,6 +165,14 @@ func (m GameModel) View() tea.View {
 		}
 
 		world.WriteString("\n")
+	}
+
+	for i := range m.client.Logs {
+		if i < 10 {
+			logMessage := m.client.Logs[len(m.client.Logs)-i-1]
+			msg := fmt.Sprintf("%s | %s\n", logMessage.Scope, logMessage.Message)
+			log.WriteString(msg)
+		}
 	}
 
 	worldContent := worldStyle.Render(world.String())

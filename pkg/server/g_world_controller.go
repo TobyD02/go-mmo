@@ -9,18 +9,20 @@ import (
 )
 
 type GWorldController struct {
-	GameWorld     *game.GameWorld
-	getServerTick func() int
+	GameWorld        *game.GameWorld
+	getServerTick    func() int
+	getMessageRouter func() *GMessageRouter
 
 	changedPlayers       map[string]struct{}
 	changedInteractables map[string]struct{}
 	changedTiles         map[game.Vec2]struct{}
 }
 
-func NewGWorldController(worldWidth, worldHeight int, getTicker func() int) *GWorldController {
+func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getMessageRouter func() *GMessageRouter) *GWorldController {
 	return &GWorldController{
-		GameWorld:     game.NewGameWorld(worldWidth, worldHeight),
-		getServerTick: getTicker,
+		GameWorld:        game.NewGameWorld(worldWidth, worldHeight),
+		getServerTick:    getTicker,
+		getMessageRouter: getMessageRouter,
 
 		changedPlayers: make(map[string]struct{}),
 
@@ -141,12 +143,12 @@ func (wc *GWorldController) addPlayer(player *game.GPlayer) {
 	wc.GameWorld.Players[player.ID] = player
 }
 
-func (wc *GWorldController) MovePlayer(playerID string, dx, dy int) {
+func (wc *GWorldController) MovePlayer(client *GServerClient, dx, dy int) {
 	if dx == 0 && dy == 0 {
 		return
 	}
 
-	player, exists := wc.GameWorld.Players[playerID]
+	player, exists := wc.GameWorld.Players[client.ID]
 	if !exists { // Safe guard
 		return
 	}
@@ -170,13 +172,14 @@ func (wc *GWorldController) MovePlayer(playerID string, dx, dy int) {
 	player.Pos.X += dx
 	player.Pos.Y += dy
 
-	wc.changedPlayers[playerID] = struct{}{}
+	wc.changedPlayers[client.ID] = struct{}{}
 
+	// wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("moved from %d to %d", player.Pos.X, player.Pos.Y))
 	// log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
 }
 
-func (wc *GWorldController) InteractWith(playerID string, interactableID string) {
-	player, exists := wc.GameWorld.Players[playerID]
+func (wc *GWorldController) InteractWith(client *GServerClient, interactableID string) {
+	player, exists := wc.GameWorld.Players[client.ID]
 	if !exists { // Safe guard
 		return
 	}
@@ -191,11 +194,14 @@ func (wc *GWorldController) InteractWith(playerID string, interactableID string)
 	}
 
 	interactable.DoWork(wc.getServerTick())
+	wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("worked %s", interactable.ID))
 	if interactable.WorkIsDone() {
 		yield, yieldAmount := interactable.GetYieldAndTriggerCooldown()
 		player.AddToInventory(yield, yieldAmount)
 
-		log.Printf("WORLD | Player %s inventory: %v", playerID, player.Inventory)
+		log.Printf("WORLD | Player %s inventory: %v", client.ID, player.Inventory)
+
+		wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("Received %dx %s", yieldAmount, yield.Name))
 
 		for _, i := range player.Inventory {
 			log.Printf("\t ITEM | %s | %v", i.Item.Name, i.Quantity)
