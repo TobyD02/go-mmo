@@ -44,7 +44,7 @@ func (c *GServerClient) WriteLoop() {
 		select {
 		case message := <-c.OutboundMessages:
 			err := c.Conn.WriteMessage(
-				websocket.TextMessage,
+				messages.GWebsocketMessageType,
 				message,
 			)
 

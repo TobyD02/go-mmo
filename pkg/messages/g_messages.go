@@ -3,7 +3,13 @@ package messages
 
 import (
 	"encoding/json"
+	"fmt"
+
+	"github.com/gorilla/websocket"
 )
+
+// Type of websocket message to be sent
+const GWebsocketMessageType = websocket.TextMessage
 
 type GMessageType int
 
@@ -31,4 +37,13 @@ func ParseMessage(data []byte) (*GMessage, error) {
 	}
 
 	return &message, nil
+}
+
+func (m *GMessage) Encode() ([]byte, error) {
+	data, err := json.Marshal(m)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal message: %s", err)
+	}
+
+	return data, nil
 }

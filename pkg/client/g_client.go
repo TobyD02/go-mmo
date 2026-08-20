@@ -84,7 +84,7 @@ func (c *GClient) Start(serverURI string, clientID string) (*game.GameWorld, err
 func (c *GClient) WriteLoop() {
 	for message := range c.OutboundMessages {
 		err := c.conn.WriteMessage(
-			websocket.TextMessage,
+			messages.GWebsocketMessageType,
 			message,
 		)
 
@@ -134,7 +134,7 @@ func (c *GClient) sendMessageSync(msg *messages.GMessage, err error) error {
 		return fmt.Errorf("failed to marshal message: %s", err)
 	}
 
-	err = c.conn.WriteMessage(websocket.TextMessage, data)
+	err = c.conn.WriteMessage(messages.GWebsocketMessageType, data)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %s", err)
 	}
