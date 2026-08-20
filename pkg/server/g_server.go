@@ -14,23 +14,30 @@ import (
 )
 
 type GServer struct {
-	Clients              map[string]*GServerClient
-	WorldController      *GWorldController
-	clientsMutex         sync.RWMutex
+	Clients      map[string]*GServerClient
+	clientsMutex sync.RWMutex
+
+	ClientsReadOnly      map[string]*GServerClient
+	clientsReadOnlyMutex sync.RWMutex
+
+	WorldController *GWorldController
+
 	queuedConnections    []string
 	queuedDisconnections []string
-	upgrader             websocket.Upgrader
-	TickSpeed            time.Duration
-	tick                 int
+
+	upgrader websocket.Upgrader
+
+	TickSpeed time.Duration
+	tick      int
 
 	MessageRouter *GMessageRouter
 }
 
 func NewGServer(tickSpeed time.Duration, worldWidth int, worldHeight int) *GServer {
-	clients := make(map[string]*GServerClient)
-
 	server := &GServer{
-		Clients:              clients,
+		Clients:         make(map[string]*GServerClient),
+		ClientsReadOnly: make(map[string]*GServerClient),
+
 		queuedConnections:    make([]string, 0),
 		queuedDisconnections: make([]string, 0),
 		upgrader: websocket.Upgrader{
@@ -108,6 +115,74 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+func (s *GServer) removeClient(client *GServerClient) {
+	s.clientsMutex.Lock()
+
+	delete(s.Clients, client.ID)
+	s.queuedDisconnections = append(s.queuedDisconnections, client.ID)
+	s.clientsMutex.Unlock()
+
+	client.Close()
+}
+
+func (s *GServer) HandleClientConnectionReadOnly(w http.ResponseWriter, r *http.Request) {
+	// Upgrade to a websocket connection
+	conn, err := s.upgrader.Upgrade(w, r, nil)
+
+	if err != nil {
+		log.Println("upgrade:", err)
+		return
+	}
+
+	client := NewGServerClient(conn)
+	err = client.EstablishConnection()
+	if err != nil {
+		log.Printf("failed to establish client connection: %s", err)
+
+		client.Close()
+		return
+	}
+
+	s.clientsReadOnlyMutex.Lock()
+
+	if _, exists := s.ClientsReadOnly[client.ID]; exists {
+		s.clientsReadOnlyMutex.Unlock()
+
+		log.Printf("(read only) client already connected: %s", client.ID)
+
+		return
+	}
+
+	// Assign the client connection
+	s.ClientsReadOnly[client.ID] = client
+	s.clientsReadOnlyMutex.Unlock()
+
+	initialWorldStateMessage, err := s.buildInitialWorldStateMessage()
+	if err != nil {
+		s.removeClientReadOnly(client)
+		return
+	}
+
+	s.sendInitialWorldState(client, initialWorldStateMessage)
+
+	// Defer deletion on disconnect
+	defer s.removeClientReadOnly(client)
+
+	// Initialise the ping loop (ensure client is connected) and write loop (for outbound messages)
+	go client.PingLoop()
+	// log.Println("client connected: ", client.ID)
+
+	client.WriteLoop()
+}
+
+func (s *GServer) removeClientReadOnly(client *GServerClient) {
+	s.clientsReadOnlyMutex.Lock()
+	delete(s.ClientsReadOnly, client.ID)
+	s.clientsReadOnlyMutex.Unlock()
+
+	client.Close()
+}
+
 func (s *GServer) buildInitialWorldStateMessage() ([]byte, error) {
 	// First message is world state
 	serverInitialWorldStateMessage, err := messages.NewGServerInitialWorldStateMessage(s.WorldController.GameWorld)
@@ -124,21 +199,18 @@ func (s *GServer) sendInitialWorldState(client *GServerClient, initialWorldState
 	client.WriteMessage(initialWorldStateMessage)
 }
 
-func (s *GServer) removeClient(client *GServerClient) {
-	s.clientsMutex.Lock()
-
-	delete(s.Clients, client.ID)
-	s.queuedDisconnections = append(s.queuedDisconnections, client.ID)
-	s.clientsMutex.Unlock()
-
-	client.Close()
-}
-
 func (s *GServer) clientCount() int {
 	s.clientsMutex.RLock()
 	defer s.clientsMutex.RUnlock()
 
 	return len(s.Clients)
+}
+
+func (s *GServer) clientReadOnlyCount() int {
+	s.clientsReadOnlyMutex.RLock()
+	defer s.clientsReadOnlyMutex.RUnlock()
+
+	return len(s.ClientsReadOnly)
 }
 
 func (s *GServer) GameLoop() {
@@ -155,13 +227,14 @@ func (s *GServer) GameLoop() {
 		if timeTaken > peakTickSpeed {
 			peakTickSpeed = timeTaken
 		}
-		// log.Printf(
-		// 	"TICK | slowest: %v, took: %v, target: %v, clients: %v",
-		// 	peakTickSpeed,
-		// 	timeTaken,
-		// 	s.TickSpeed,
-		// 	s.clientCount(),
-		// )
+		log.Printf(
+			"TICK | slowest: %v, took: %v, target: %v, clients: %v, clients (ro): %v",
+			peakTickSpeed,
+			timeTaken,
+			s.TickSpeed,
+			s.clientCount(),
+			s.clientReadOnlyCount(),
+		)
 	}
 }
 
@@ -173,6 +246,14 @@ func (s *GServer) snapshotClients() map[string]*GServerClient {
 	return currentClients
 }
 
+func (s *GServer) snapshotClientsReadOnly() map[string]*GServerClient {
+	s.clientsReadOnlyMutex.RLock()
+	currentClientsReadOnly := make(map[string]*GServerClient, len(s.ClientsReadOnly))
+	maps.Copy(currentClientsReadOnly, s.ClientsReadOnly)
+	s.clientsReadOnlyMutex.RUnlock()
+	return currentClientsReadOnly
+}
+
 func (s *GServer) doTick() {
 	s.tick++
 
@@ -181,6 +262,7 @@ func (s *GServer) doTick() {
 
 	// Get snapshot of current clients
 	currentClients := s.snapshotClients()
+	currentClientsReadOnly := s.snapshotClientsReadOnly()
 
 	// Do the game world tick
 	s.doGameWorldTick(currentClients)
@@ -192,7 +274,7 @@ func (s *GServer) doTick() {
 		log.Printf("Failed to push world diff message: %s", err)
 	}
 
-	s.MessageRouter.Flush(currentClients)
+	s.MessageRouter.Flush(currentClients, currentClientsReadOnly)
 }
 
 func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {

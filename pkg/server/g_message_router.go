@@ -28,13 +28,22 @@ func (m *GMessageRouter) pushClientMessage(clientID string, msg []byte) {
 	m.clientMessages[clientID] = append(m.clientMessages[clientID], msg)
 }
 
-func (m *GMessageRouter) Flush(currentClients map[string]*GServerClient) {
+func (m *GMessageRouter) Flush(
+	currentClients map[string]*GServerClient,
+	readOnlyClients map[string]*GServerClient,
+) {
 	for clientID, client := range currentClients {
 		for _, globalMessage := range m.globalMessages {
 			client.WriteMessage(globalMessage)
 		}
 		for _, clientMessage := range m.clientMessages[clientID] {
 			client.WriteMessage(clientMessage)
+		}
+	}
+
+	for _, client := range readOnlyClients {
+		for _, globalMessage := range m.globalMessages {
+			client.WriteMessage(globalMessage)
 		}
 	}
 

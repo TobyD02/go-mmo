@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"math/rand/v2"
 	"os"
 	"time"
 
@@ -18,10 +17,11 @@ func main() {
 
 	clientID := uuid.NewString()
 
-	c := client.NewGClient()
+	c := client.NewGClient(true)
 
 	log.Printf("Connecting to %s", serverURI)
 
+	// Make it read only
 	world, err := c.Start(serverURI, clientID)
 	if err != nil {
 		log.Fatalf("Failed to start client: %v", err)
@@ -65,7 +65,6 @@ func main() {
 				diff,
 			)
 		}
-
-		c.SendMoveMessage(rand.IntN(3)-1, rand.IntN(3)-1)
+		// c.SendMoveMessage(rand.IntN(3)-1, rand.IntN(3)-1)
 	}
 }

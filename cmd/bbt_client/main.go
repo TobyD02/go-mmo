@@ -17,7 +17,7 @@ func main() {
 	}
 
 	clientID := uuid.NewString()
-	client := client.NewGClient()
+	client := client.NewGClient(false)
 	worldState, err := client.Start(serverURI, clientID)
 
 	if err != nil {

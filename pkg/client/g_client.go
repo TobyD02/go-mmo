@@ -23,9 +23,11 @@ type GClient struct {
 	OutboundMessages chan []byte
 
 	DrainedMessages map[messages.GMessageType][]*messages.GMessage
+
+	readOnly bool
 }
 
-func NewGClient() *GClient {
+func NewGClient(readOnly bool) *GClient {
 	logLimit := 100
 
 	return &GClient{
@@ -35,12 +37,19 @@ func NewGClient() *GClient {
 		logLimit:         logLimit,
 
 		DrainedMessages: make(map[messages.GMessageType][]*messages.GMessage),
+
+		readOnly: readOnly,
 	}
 }
 
 func (c *GClient) connectToServer(serverURI string) error {
+	uri := serverURI + "/ws"
+	if c.readOnly {
+		uri = uri + "/ro"
+	}
+
 	conn, _, err := websocket.DefaultDialer.Dial(
-		serverURI+"/ws",
+		uri,
 		nil,
 	)
 	if err != nil {
@@ -89,12 +98,19 @@ func (c *GClient) Start(serverURI string, clientID string) (*game.GameWorld, err
 	success = true
 
 	go c.ReadLoop()
-	go c.WriteLoop()
+
+	if !c.readOnly {
+		go c.WriteLoop()
+	}
 
 	return parsedData.InitialWorldState, nil
 }
 
 func (c *GClient) WriteLoop() {
+	if c.readOnly {
+		return // cannot write in read only mode
+	}
+
 	for message := range c.OutboundMessages {
 		err := c.conn.WriteMessage(
 			messages.GWebsocketMessageType,
@@ -139,6 +155,8 @@ func (c *GClient) SendInteractMessage(interactableID string) error {
 
 // sendMessageSync - Sends a message synchronously (doesn't use the write loop goroutine)
 func (c *GClient) sendMessageSync(msg *messages.GMessage, err error) error {
+	// Doesn't safe guard read only connections...
+
 	if err != nil {
 		return fmt.Errorf("failed to create message %s", err)
 	}
@@ -158,6 +176,11 @@ func (c *GClient) sendMessageSync(msg *messages.GMessage, err error) error {
 }
 
 func (c *GClient) sendMessage(msg *messages.GMessage, err error) error {
+
+	if c.readOnly {
+		return fmt.Errorf("cannot send messages in read only mode")
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to create message %s", err)
 	}
