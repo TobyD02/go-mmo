@@ -2,6 +2,7 @@ package bbt_client
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -111,6 +112,7 @@ func updateWorld(
 func (m GameModel) View() tea.View {
 	var world strings.Builder
 	var log strings.Builder
+	var inventory strings.Builder
 
 	viewportWidth := 64
 	viewportHeight := 32
@@ -154,7 +156,7 @@ func (m GameModel) View() tea.View {
 
 			if interactable != nil {
 				if interactable.CurrentTickCooldown <= 0 {
-					drawInteractable(&world)
+					drawInteractable(&world, interactable.OccupiedBy, client.ID)
 				} else {
 					drawInteractableCooldown(&world)
 				}
@@ -175,12 +177,34 @@ func (m GameModel) View() tea.View {
 		}
 	}
 
+	itemIDs := make([]string, 0, len(client.Inventory))
+
+	for itemID := range client.Inventory {
+		itemIDs = append(itemIDs, itemID)
+	}
+
+	sort.Strings(itemIDs)
+
+	for _, itemID := range itemIDs {
+		name := game.GetItemNameFromRegistry(itemID)
+		amount := client.Inventory[itemID]
+		inventory.WriteString(
+			fmt.Sprintf("%s | %d\n", name, amount),
+		)
+	}
+
 	worldContent := worldStyle.Render(world.String())
+
+	inventoryContent := inventoryStyle.Render(inventory.String())
+
 	logContent := logStyle.Render(log.String())
+
+	bottomContent := lipgloss.JoinHorizontal(lipgloss.Top, inventoryContent, logContent)
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		worldContent,
-		logContent,
+		bottomContent,
 	)
 
 	return tea.NewView(gameStyle.Render(content))

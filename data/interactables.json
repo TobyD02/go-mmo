@@ -3,7 +3,7 @@
     "name": "Oak Tree",
     "max_tick_cooldown": 60,
     "tick_work_for_yield": 5,
-    "max_occupant_cooldown": 5,
+    "max_occupant_cooldown": 30,
     "loot_pool": [
       {
         "item_id": "item.oak_wood",

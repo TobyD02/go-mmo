@@ -10,20 +10,16 @@ import (
 )
 
 func main() {
-
-	// Get it to initialise it
-	itemRegistry, err := game.GetItemRegistry()
+	// Initialise Registries
+	_, err := game.GetItemRegistry()
 	if err != nil {
 		log.Fatalf("Failed to get item registry %s", err)
 	}
 
-	interactableRegistry, err := game.GetInteractableRegistry()
+	_, err = game.GetInteractableRegistry()
 	if err != nil {
 		log.Fatalf("Failed to get item registry %s", err)
 	}
-
-	log.Println("%v", itemRegistry)
-	log.Println("%v", interactableRegistry)
 
 	server := server.NewGServer(time.Millisecond*50, 200, 200)
 	http.HandleFunc("/ws", server.HandleClientConnection)
