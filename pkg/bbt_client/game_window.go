@@ -47,6 +47,17 @@ func (m GameModel) Init() tea.Cmd {
 	return tick()
 }
 
+func (m GameModel) interactDirection(dx, dy int) (tea.Model, tea.Cmd) {
+	self := m.gameWorld.Players[m.client.ClientID]
+	interactable := m.gameWorld.QueryInteractableAtPosition(self.Pos.X+dx, self.Pos.Y+dy)
+
+	if interactable != nil {
+		return m, BBTSendInteractMessage(m.client, interactable.ID)
+	}
+
+	return m, nil
+}
+
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
@@ -73,26 +84,29 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 
-		case "up", "w":
+		case "w":
 			return m, BBTSendMoveMessage(m.client, 0, -1)
 
-		case "down", "s":
+		case "s":
 			return m, BBTSendMoveMessage(m.client, 0, 1)
 
-		case "left", "a":
+		case "a":
 			return m, BBTSendMoveMessage(m.client, -1, 0)
 
-		case "right", "d":
+		case "d":
 			return m, BBTSendMoveMessage(m.client, 1, 0)
 
-		case "space":
-			self := m.gameWorld.Players[m.client.ClientID]
-			interactable := m.gameWorld.QueryInteractableAtPosition(self.Pos.X-1, self.Pos.Y)
+		case "up":
+			return m.interactDirection(0, -1)
 
-			if interactable != nil {
-				return m, BBTSendInteractMessage(m.client, interactable.ID)
-			}
+		case "down":
+			return m.interactDirection(0, 1)
 
+		case "left":
+			return m.interactDirection(-1, 0)
+
+		case "right":
+			return m.interactDirection(1, 0)
 		}
 
 	case ConnectionErrorMsg:
