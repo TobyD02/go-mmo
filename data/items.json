@@ -4,5 +4,14 @@
   },
   "item.oak_branch": {
     "name": "Oak Branch"
+  },
+  "item.gold_coin": {
+    "name": "Gold Coin"
+  },
+  "item.feather": {
+    "name": "Feather"
+  },
+  "item.raw_hide": {
+    "name": "Raw Hide"
   }
 }

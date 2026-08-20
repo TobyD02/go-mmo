@@ -14,6 +14,7 @@ type GWorldController struct {
 	getMessageRouter func() *GMessageRouter
 
 	changedPlayers       map[string]struct{}
+	changedNpcs          map[string]struct{}
 	changedInteractables map[string]struct{}
 	changedTiles         map[game.Vec2]struct{}
 }
@@ -25,6 +26,7 @@ func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getM
 		getMessageRouter: getMessageRouter,
 
 		changedPlayers: make(map[string]struct{}),
+		changedNpcs:    make(map[string]struct{}),
 
 		changedInteractables: make(map[string]struct{}),
 		changedTiles:         make(map[game.Vec2]struct{}),
@@ -44,8 +46,11 @@ func (wc *GWorldController) SetupWorld(
 				// Not on a wall, so spawn an interactable (sometimes)
 
 				if x != wc.GameWorld.SpawnPoint.X && y != wc.GameWorld.SpawnPoint.Y {
-					if rand.IntN(100) == 1 {
-						wc.AddInteractable(game.NewGInteractableInstance(x, y, "interactable.oak_tree"))
+					randInt := rand.IntN(100)
+					if randInt == 1 {
+						wc.AddInteractable(game.NewGInteractableInstance("interactable.oak_tree", x, y))
+					} else if randInt == 2 {
+						wc.AddNpc(game.NewGNpcInstance("npc.chicken", x, y))
 					}
 				}
 			}
@@ -57,6 +62,7 @@ func (wc *GWorldController) SetupWorld(
 func (wc *GWorldController) BuildWorldDiff() game.GameWorldDiff {
 	diff := game.GameWorldDiff{
 		PlayersDiff:       make(map[string]*game.GPlayer),
+		NpcsDiff:          make(map[string]*game.GNpcInstance),
 		InteractablesDiff: make(map[string]*game.GInteractableInstance),
 	}
 
@@ -67,6 +73,16 @@ func (wc *GWorldController) BuildWorldDiff() game.GameWorldDiff {
 			diff.PlayersDiff[playerID] = player
 		} else {
 			diff.PlayersDiff[playerID] = nil
+		}
+	}
+
+	for npcID := range wc.changedNpcs {
+		npc, exists := wc.GameWorld.Npcs[npcID]
+
+		if exists {
+			diff.NpcsDiff[npcID] = npc
+		} else {
+			diff.NpcsDiff[npcID] = nil
 		}
 	}
 
@@ -106,6 +122,16 @@ func (wc *GWorldController) AddInteractable(interactable *game.GInteractableInst
 	}
 
 	wc.GameWorld.Interactables[interactable.ID] = interactable
+	wc.changedInteractables[interactable.ID] = struct{}{}
+}
+
+func (wc *GWorldController) AddNpc(npc *game.GNpcInstance) {
+	if wc.GameWorld.QueryMap(npc.Pos.X, npc.Pos.Y) != game.TileWalkable {
+		return // Only on walkable tiles, not inside a wall
+	}
+
+	wc.GameWorld.Npcs[npc.ID] = npc
+	wc.changedNpcs[npc.ID] = struct{}{}
 }
 
 func (wc *GWorldController) SpawnNewPlayer(playerID string) error {
@@ -168,6 +194,41 @@ func (wc *GWorldController) MovePlayer(client *GServerClient, dx, dy int) {
 	player.Pos.Y += dy
 
 	wc.changedPlayers[client.ID] = struct{}{}
+
+	// wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("moved from %d to %d", player.Pos.X, player.Pos.Y))
+	// log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
+}
+
+func (wc *GWorldController) MoveNpc(npcInstanceID string, dx, dy int) {
+	if dx == 0 && dy == 0 {
+		return
+	}
+
+	npc, exists := wc.GameWorld.Npcs[npcInstanceID]
+	if !exists { // Safe guard
+		return
+	}
+
+	newX := npc.Pos.X + dx
+	newY := npc.Pos.Y + dy
+
+	if (npc.Pos.Y+dy < 0 || npc.Pos.Y+dy >= len(wc.GameWorld.Map)) ||
+		(npc.Pos.X+dx < 0 || npc.Pos.X+dx >= len(wc.GameWorld.Map[npc.Pos.Y+dy])) {
+		return
+	}
+
+	if wc.GameWorld.QueryMap(newX, newY) != game.TileWalkable {
+		return // Cannot move to unwalkable tile
+	}
+
+	if wc.GameWorld.QueryInteractableAtPosition(newX, newY) != nil {
+		return // Cannot move over interactables?
+	}
+
+	npc.Pos.X += dx
+	npc.Pos.Y += dy
+
+	wc.changedNpcs[npcInstanceID] = struct{}{}
 
 	// wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("moved from %d to %d", player.Pos.X, player.Pos.Y))
 	// log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
@@ -243,5 +304,37 @@ func (wc *GWorldController) DoTickers() {
 		}
 
 		wc.changedInteractables[interactable.ID] = struct{}{}
+	}
+}
+
+func (wc *GWorldController) DoNpcs() {
+
+	for npcInstanceID, npcInstance := range wc.GameWorld.Npcs {
+		npc := game.GetNpcFromRegistry(npcInstance.NpcID)
+		if npc == nil {
+			return
+		}
+
+		if wc.getServerTick()-npcInstance.LastTickUpdated < npc.TickThinkFrequency {
+			return
+		}
+
+		delta := npcInstance.Think(wc.getServerTick())
+
+		newX := npcInstance.Pos.X + delta.X
+		newY := npcInstance.Pos.Y + delta.Y
+
+		if free := wc.GameWorld.QueryInteractableAtPosition(newX, newY); free != nil {
+			return
+		}
+
+		if free := wc.GameWorld.QueryMap(newX, newY); free != game.TileWalkable {
+			return
+		}
+
+		if delta.X != 0 || delta.Y != 0 {
+			wc.MoveNpc(npcInstanceID, delta.X, delta.Y)
+			wc.changedNpcs[npcInstanceID] = struct{}{}
+		}
 	}
 }

@@ -4,6 +4,7 @@ package game
 type GameWorld struct {
 	Map           [][]GameWorldTile
 	Players       map[string]*GPlayer
+	Npcs          map[string]*GNpcInstance
 	Interactables map[string]*GInteractableInstance
 	Width         int
 	Height        int
@@ -17,11 +18,13 @@ func NewGameWorld(width, height int) *GameWorld {
 	}
 
 	gamePlayers := make(map[string]*GPlayer)
+	gameNpcs := make(map[string]*GNpcInstance)
 	gameInteractables := make(map[string]*GInteractableInstance)
 
 	return &GameWorld{
 		Map:           gameMap,
 		Players:       gamePlayers,
+		Npcs:          gameNpcs,
 		Interactables: gameInteractables,
 		Width:         width, Height: height,
 		SpawnPoint: Vec2{int(width / 2), int(height / 2)},
@@ -46,6 +49,19 @@ func (g *GameWorld) ApplyDiff(diff *GameWorldDiff) {
 			delete(g.Players, id)
 		} else {
 			g.Players[id] = player
+		}
+	}
+
+	// Npcs
+	if g.Npcs == nil {
+		g.Npcs = make(map[string]*GNpcInstance)
+	}
+
+	for id, npc := range diff.NpcsDiff {
+		if npc == nil {
+			delete(g.Npcs, id)
+		} else {
+			g.Npcs[id] = npc
 		}
 	}
 
@@ -84,6 +100,16 @@ func (g *GameWorld) QueryPlayersAtPosition(x, y int) map[string]*GPlayer {
 
 func (g *GameWorld) QueryInteractableAtPosition(x, y int) *GInteractableInstance { // singular since there can only be one
 	for _, i := range g.Interactables {
+		if i.Pos.X == x && i.Pos.Y == y {
+			return i
+		}
+	}
+
+	return nil
+}
+
+func (g *GameWorld) QueryNpcAtPosition(x, y int) *GNpcInstance { // singular since there can only be one
+	for _, i := range g.Npcs {
 		if i.Pos.X == x && i.Pos.Y == y {
 			return i
 		}

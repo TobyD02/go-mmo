@@ -22,9 +22,11 @@ var (
 	otherChar                = "@@"
 	interactableChar         = "II"
 	interactableCooldownChar = "||"
+	npcChar                  = "OO"
 )
 
 var selfStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#499953")).Bold(true)
+var npcStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#a8326b")).Bold(true)
 var otherStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#9c7d36")).Bold(true)
 var interactableStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#74bce3")).Bold(true)
 var interactableOccupiedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#8ec276")).Bold(true)
@@ -46,6 +48,10 @@ func drawSelf(b *strings.Builder) {
 
 func drawOther(b *strings.Builder) {
 	b.WriteString(otherStyle.Render(otherChar))
+}
+
+func drawNpc(b *strings.Builder) {
+	b.WriteString(npcStyle.Render(npcChar))
 }
 
 func drawInteractable(b *strings.Builder, occupiedBy string, clientID string) {

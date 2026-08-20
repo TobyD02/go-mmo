@@ -18,8 +18,15 @@ func main() {
 
 	_, err = game.GetInteractableRegistry()
 	if err != nil {
-		log.Fatalf("Failed to get item registry %s", err)
+		log.Fatalf("Failed to get interactable registry %s", err)
 	}
+
+	npcRegistry, err := game.GetNpcRegistry()
+	if err != nil {
+		log.Fatalf("Failed to get npc registry %s", err)
+	}
+
+	log.Println("Npc Registry: %v", npcRegistry)
 
 	server := server.NewGServer(time.Millisecond*50, 200, 200)
 	http.HandleFunc("/ws", server.HandleClientConnection)

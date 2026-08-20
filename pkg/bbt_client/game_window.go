@@ -143,6 +143,7 @@ func (m GameModel) View() tea.View {
 
 			players := m.gameWorld.QueryPlayersAtPosition(x, y)
 			interactable := m.gameWorld.QueryInteractableAtPosition(x, y)
+			npc := m.gameWorld.QueryNpcAtPosition(x, y)
 
 			if len(players) > 0 {
 				if players[m.client.ClientID] != nil {
@@ -160,6 +161,11 @@ func (m GameModel) View() tea.View {
 				} else {
 					drawInteractableCooldown(&world)
 				}
+				continue
+			}
+
+			if npc != nil {
+				drawNpc(&world)
 				continue
 			}
 

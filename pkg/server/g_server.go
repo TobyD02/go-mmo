@@ -227,14 +227,14 @@ func (s *GServer) GameLoop() {
 		if timeTaken > peakTickSpeed {
 			peakTickSpeed = timeTaken
 		}
-		log.Printf(
-			"TICK | slowest: %v, took: %v, target: %v, clients: %v, clients (ro): %v",
-			peakTickSpeed,
-			timeTaken,
-			s.TickSpeed,
-			s.clientCount(),
-			s.clientReadOnlyCount(),
-		)
+		// log.Printf(
+		// 	"TICK | slowest: %v, took: %v, target: %v, clients: %v, clients (ro): %v",
+		// 	peakTickSpeed,
+		// 	timeTaken,
+		// 	s.TickSpeed,
+		// 	s.clientCount(),
+		// 	s.clientReadOnlyCount(),
+		// )
 	}
 }
 
@@ -286,6 +286,7 @@ func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {
 
 	// Run tickers last
 	s.WorldController.DoTickers()
+	s.WorldController.DoNpcs()
 }
 
 func (s *GServer) getClient(clientID string) *GServerClient {

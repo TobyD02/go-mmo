@@ -1,0 +1,16 @@
+{
+  "npc.chicken": {
+    "name": "Chicken",
+    "loot_pool": [
+      {
+        "item_id": "item.feather",
+        "yield_amount_min": 1,
+        "yield_amount_max": 3,
+        "yield_chance": 1
+      }
+    ],
+    "aggressive": false,
+    "will_flee": false,
+    "think_tick_frequency": 5
+  }
+}

@@ -24,7 +24,7 @@ type GInteractableInstance struct {
 	OccupantCooldown    int
 }
 
-func NewGInteractableInstance(x, y int, interactableID string) *GInteractableInstance {
+func NewGInteractableInstance(interactableID string, x, y int) *GInteractableInstance {
 	return &GInteractableInstance{
 		ID:                  uuid.NewString(),
 		InteractableID:      interactableID,
