@@ -197,6 +197,9 @@ func (wc *GWorldController) InteractWith(client *GServerClient, interactableInst
 		yields := interactableInstance.GetYieldAndTriggerCooldown()
 		player.AddToInventory(yields)
 
+		// Added to player inventory, so player has changed
+		wc.changedPlayers[player.ID] = struct{}{}
+
 		for itemID, yield := range yields {
 			itemName := game.GetItemNameFromRegistry(itemID)
 			wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("Received %dx %s", yield, itemName))
