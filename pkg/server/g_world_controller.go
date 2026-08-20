@@ -6,7 +6,6 @@ import (
 	"math/rand/v2"
 
 	"github.com/tobyd02/golang-mmo/pkg/game"
-	"github.com/tobyd02/golang-mmo/pkg/registry"
 )
 
 type GWorldController struct {
@@ -35,8 +34,6 @@ func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getM
 func (wc *GWorldController) SetupWorld(
 	edgeWalls bool,
 ) {
-	lootPool := game.NewGLootPool([]string{"item.oak_wood", "item.oak_branch"})
-
 	for y, row := range wc.GameWorld.Map {
 		for x := range row {
 			if (x == 0 || x == wc.GameWorld.Width-1) || (y == 0 || y == wc.GameWorld.Height-1) {
@@ -48,7 +45,7 @@ func (wc *GWorldController) SetupWorld(
 
 				if x != wc.GameWorld.SpawnPoint.X && y != wc.GameWorld.SpawnPoint.Y {
 					if rand.IntN(100) == 1 {
-						wc.AddInteractable(game.NewGInteractable(x, y, lootPool))
+						wc.AddInteractable(game.NewGInteractableInstance(x, y, "interactable.oak_tree"))
 					}
 				}
 			}
@@ -60,7 +57,7 @@ func (wc *GWorldController) SetupWorld(
 func (wc *GWorldController) BuildWorldDiff() game.GameWorldDiff {
 	diff := game.GameWorldDiff{
 		PlayersDiff:       make(map[string]*game.GPlayer),
-		InteractablesDiff: make(map[string]*game.GInteractable),
+		InteractablesDiff: make(map[string]*game.GInteractableInstance),
 	}
 
 	for playerID := range wc.changedPlayers {
@@ -100,7 +97,7 @@ func (wc *GWorldController) BuildWorldDiff() game.GameWorldDiff {
 	return diff
 }
 
-func (wc *GWorldController) AddInteractable(interactable *game.GInteractable) {
+func (wc *GWorldController) AddInteractable(interactable *game.GInteractableInstance) {
 	if wc.GameWorld.QueryInteractableAtPosition(interactable.Pos.X, interactable.Pos.Y) != nil {
 		return // Only a single interactable in a tile
 	}
@@ -176,29 +173,32 @@ func (wc *GWorldController) MovePlayer(client *GServerClient, dx, dy int) {
 	// log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
 }
 
-func (wc *GWorldController) InteractWith(client *GServerClient, interactableID string) {
+func (wc *GWorldController) InteractWith(client *GServerClient, interactableInstanceID string) {
 	player, exists := wc.GameWorld.Players[client.ID]
 	if !exists { // Safe guard
 		return
 	}
 
-	interactable, exists := wc.GameWorld.Interactables[interactableID]
+	interactableInstance, exists := wc.GameWorld.Interactables[interactableInstanceID]
 	if !exists { // Safe guard
 		return
 	}
 
-	if !interactable.PlayerCanOccupyOrWork(player) {
+	if !interactableInstance.PlayerCanOccupyOrWork(player) {
 		return
 	}
 
-	interactable.DoWork(wc.getServerTick())
-	wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("worked %s", interactable.ID))
-	if interactable.WorkIsDone() {
-		yields := interactable.GetYieldAndTriggerCooldown()
+	interactableInstance.DoWork(wc.getServerTick())
+
+	interactableName := game.GetInteractableNameFromRegistry(interactableInstance.InteractableID)
+	wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("Worked %s", interactableName))
+
+	if interactableInstance.WorkIsDone() {
+		yields := interactableInstance.GetYieldAndTriggerCooldown()
 		player.AddToInventory(yields)
 
 		for itemID, yield := range yields {
-			itemName := registry.GetItemName(itemID)
+			itemName := game.GetItemNameFromRegistry(itemID)
 			wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("Received %dx %s", yield, itemName))
 		}
 
@@ -207,7 +207,7 @@ func (wc *GWorldController) InteractWith(client *GServerClient, interactableID s
 		}
 	}
 
-	wc.changedInteractables[interactableID] = struct{}{}
+	wc.changedInteractables[interactableInstanceID] = struct{}{}
 }
 
 func (wc *GWorldController) DoTickers() {

@@ -1,15 +1,13 @@
-package registry
+package game
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
-
-	"github.com/tobyd02/golang-mmo/pkg/game"
 )
 
-type GItemRegistry map[string]*game.GItem
+type GItemRegistry map[string]*GItem
 
 var (
 	itemRegistry     GItemRegistry
@@ -60,7 +58,7 @@ func initItemRegistry() error {
 	return nil
 }
 
-func GetItemName(itemID string) string {
+func GetItemNameFromRegistry(itemID string) string {
 	itemRegistry, err := GetItemRegistry()
 	if err != nil {
 		return "N/A"

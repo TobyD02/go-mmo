@@ -4,7 +4,7 @@ package game
 type GameWorld struct {
 	Map           [][]GameWorldTile
 	Players       map[string]*GPlayer
-	Interactables map[string]*GInteractable
+	Interactables map[string]*GInteractableInstance
 	Width         int
 	Height        int
 	SpawnPoint    Vec2
@@ -17,7 +17,7 @@ func NewGameWorld(width, height int) *GameWorld {
 	}
 
 	gamePlayers := make(map[string]*GPlayer)
-	gameInteractables := make(map[string]*GInteractable)
+	gameInteractables := make(map[string]*GInteractableInstance)
 
 	return &GameWorld{
 		Map:           gameMap,
@@ -51,7 +51,7 @@ func (g *GameWorld) ApplyDiff(diff *GameWorldDiff) {
 
 	// Interactables
 	if g.Interactables == nil {
-		g.Interactables = make(map[string]*GInteractable)
+		g.Interactables = make(map[string]*GInteractableInstance)
 	}
 
 	for id, interactable := range diff.InteractablesDiff {
@@ -82,7 +82,7 @@ func (g *GameWorld) QueryPlayersAtPosition(x, y int) map[string]*GPlayer {
 	return players
 }
 
-func (g *GameWorld) QueryInteractableAtPosition(x, y int) *GInteractable { // singular since there can only be one
+func (g *GameWorld) QueryInteractableAtPosition(x, y int) *GInteractableInstance { // singular since there can only be one
 	for _, i := range g.Interactables {
 		if i.Pos.X == x && i.Pos.Y == y {
 			return i

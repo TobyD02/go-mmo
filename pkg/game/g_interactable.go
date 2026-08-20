@@ -5,66 +5,82 @@ import (
 )
 
 type GInteractable struct {
-	ID                  string `json:"id"`
-	Pos                 Vec2   `json:"pos"`
-	MaxTickCooldown     int    `json:"max_tick_cooldown"`
-	CurrentTickCooldown int    `json:"current_tick_cooldown"`
-	TickWorkForYield    int    `json:"tick_work_for_yield"`
-	CurrentTicksWorked  int    `json:"current_ticks_worked"`
-	OccupiedBy          string `json:"occupied_by"` // entitiy ID?
-	LastTickWorked      int    `json:"last_tick_worked"`
-	OccupantCooldown    int    `json:"occupant_cooldown"`
-	MaxOccupantCooldown int    `json:"max_occupant_cooldown"`
-
-	LootPool *GLootPool `json:"loot_pool"`
+	Name                string     `json:"name"`
+	ID                  string     `json:"id"`
+	MaxTickCooldown     int        `json:"max_tick_cooldown"`
+	TickWorkForYield    int        `json:"tick_work_for_yield"`
+	MaxOccupantCooldown int        `json:"max_occupant_cooldown"`
+	LootPool            *GLootPool `json:"loot_pool"`
 }
 
-func NewGInteractable(x, y int, lootPool *GLootPool) *GInteractable {
-	return &GInteractable{
+type GInteractableInstance struct {
+	ID                  string
+	InteractableID      string
+	Pos                 Vec2
+	CurrentTickCooldown int
+	CurrentTicksWorked  int
+	OccupiedBy          string
+	LastTickWorked      int
+	OccupantCooldown    int
+}
+
+func NewGInteractableInstance(x, y int, interactableID string) *GInteractableInstance {
+	return &GInteractableInstance{
 		ID:                  uuid.NewString(),
+		InteractableID:      interactableID,
 		Pos:                 Vec2{X: x, Y: y},
-		MaxTickCooldown:     15,
 		CurrentTickCooldown: 0,
-		TickWorkForYield:    2,
 		CurrentTicksWorked:  0,
 		OccupiedBy:          "",
 		LastTickWorked:      0,
 		OccupantCooldown:    0,
-		MaxOccupantCooldown: 3,
-
-		LootPool: lootPool,
 	}
 }
 
-func (i *GInteractable) DoWork(currentTick int) {
+func (i *GInteractableInstance) DoWork(currentTick int) {
 	i.CurrentTicksWorked++
 	i.LastTickWorked = currentTick
 }
 
-func (i *GInteractable) DidWorkThisTick(currentTick int) bool {
+func (i *GInteractableInstance) DidWorkThisTick(currentTick int) bool {
 	return i.LastTickWorked == currentTick
 }
 
-func (i *GInteractable) ClearOccupant() {
+func (i *GInteractableInstance) ClearOccupant() {
 	i.OccupiedBy = ""
 }
 
-func (i *GInteractable) IsOccupied() bool {
+func (i *GInteractableInstance) IsOccupied() bool {
 	return i.OccupiedBy != ""
 }
 
-func (i *GInteractable) WorkIsDone() bool {
-	return i.CurrentTicksWorked >= i.TickWorkForYield
+func (i *GInteractableInstance) WorkIsDone() bool {
+	interactable := GetInteractableFromRegistry(i.InteractableID)
+	if interactable == nil {
+		return false
+	}
+
+	return i.CurrentTicksWorked >= interactable.TickWorkForYield
 }
 
-func (i *GInteractable) GetYieldAndTriggerCooldown() map[string]int {
-	i.CurrentTickCooldown = i.MaxTickCooldown
-	return i.LootPool.GetYield()
+func (i *GInteractableInstance) GetYieldAndTriggerCooldown() map[string]int {
+	interactable := GetInteractableFromRegistry(i.InteractableID)
+	if interactable == nil {
+		return map[string]int{}
+	}
+
+	i.CurrentTickCooldown = interactable.MaxTickCooldown
+	return interactable.LootPool.GetYield()
 }
 
 // PlayerCanOccupyOrWork - returns true if the player meets the conditions for working the Interactable.
 // this includes being within range, also taking occupancy of the interactable
-func (i *GInteractable) PlayerCanOccupyOrWork(player *GPlayer) bool {
+func (i *GInteractableInstance) PlayerCanOccupyOrWork(player *GPlayer) bool {
+	interactable := GetInteractableFromRegistry(i.InteractableID)
+	if interactable == nil {
+		return false
+	}
+
 	if player.Pos.Distance(i.Pos) > 1 {
 		return false // Cannot
 	}
@@ -79,6 +95,6 @@ func (i *GInteractable) PlayerCanOccupyOrWork(player *GPlayer) bool {
 		return false
 	}
 
-	i.OccupantCooldown = i.MaxOccupantCooldown // Reset occupant cooldown once assured of occupancy
+	i.OccupantCooldown = interactable.MaxOccupantCooldown // Reset occupant cooldown once assured of occupancy
 	return true
 }

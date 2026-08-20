@@ -1,0 +1,22 @@
+{
+  "interactable.oak_tree": {
+    "name": "Oak Tree",
+    "max_tick_cooldown": 60,
+    "tick_work_for_yield": 5,
+    "max_occupant_cooldown": 5,
+    "loot_pool": [
+      {
+        "item_id": "item.oak_wood",
+        "yield_amount_min": 1,
+        "yield_amount_max": 2,
+        "yield_chance": 0.8
+      },
+      {
+        "item_id": "item.oak_branch",
+        "yield_amount_min": 3,
+        "yield_amount_max": 5,
+        "yield_chance": 1
+      }
+    ]
+  }
+}
