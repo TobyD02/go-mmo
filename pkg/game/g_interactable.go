@@ -1,17 +1,12 @@
 package game
 
 import (
-	"math/rand/v2"
-
 	"github.com/google/uuid"
 )
 
 type GInteractable struct {
 	ID                  string `json:"id"`
 	Pos                 Vec2   `json:"pos"`
-	Yield               GItem  `json:"yield"`
-	YieldAmountMin      int    `json:"yield_amount_min"`
-	YieldAmountMax      int    `json:"yield_amount_max"`
 	MaxTickCooldown     int    `json:"max_tick_cooldown"`
 	CurrentTickCooldown int    `json:"current_tick_cooldown"`
 	TickWorkForYield    int    `json:"tick_work_for_yield"`
@@ -20,15 +15,14 @@ type GInteractable struct {
 	LastTickWorked      int    `json:"last_tick_worked"`
 	OccupantCooldown    int    `json:"occupant_cooldown"`
 	MaxOccupantCooldown int    `json:"max_occupant_cooldown"`
+
+	LootPool *GLootPool `json:"loot_pool"`
 }
 
-func NewGInteractable(x, y int, yield GItem) *GInteractable {
+func NewGInteractable(x, y int, lootPool *GLootPool) *GInteractable {
 	return &GInteractable{
 		ID:                  uuid.NewString(),
 		Pos:                 Vec2{X: x, Y: y},
-		Yield:               yield,
-		YieldAmountMin:      1,
-		YieldAmountMax:      rand.IntN(3) + 2,
 		MaxTickCooldown:     15,
 		CurrentTickCooldown: 0,
 		TickWorkForYield:    2,
@@ -37,6 +31,8 @@ func NewGInteractable(x, y int, yield GItem) *GInteractable {
 		LastTickWorked:      0,
 		OccupantCooldown:    0,
 		MaxOccupantCooldown: 3,
+
+		LootPool: lootPool,
 	}
 }
 
@@ -61,10 +57,9 @@ func (i *GInteractable) WorkIsDone() bool {
 	return i.CurrentTicksWorked >= i.TickWorkForYield
 }
 
-func (i *GInteractable) GetYieldAndTriggerCooldown() (*GItem, int) {
+func (i *GInteractable) GetYieldAndTriggerCooldown() map[string]int {
 	i.CurrentTickCooldown = i.MaxTickCooldown
-	yieldAmount := rand.IntN(i.YieldAmountMax-i.YieldAmountMin) + i.YieldAmountMin
-	return &i.Yield, yieldAmount
+	return i.LootPool.GetYield()
 }
 
 // PlayerCanOccupyOrWork - returns true if the player meets the conditions for working the Interactable.

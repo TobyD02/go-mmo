@@ -1,30 +1,30 @@
 package game
 
-import "github.com/google/uuid"
-
 type GPlayer struct {
-	ID        string            `json:"id"`
-	Pos       Vec2              `json:"pos"`
-	Inventory []*GInventoryItem `json:"inventory"`
+	ID        string         `json:"id"`
+	Pos       Vec2           `json:"pos"`
+	Inventory map[string]int `json:"inventory"` // itemID: amount
 }
 
-func NewGPlayer(x, y int) *GPlayer {
+func NewGPlayer(id string, x, y int) *GPlayer {
 
-	inventory := make([]*GInventoryItem, 0)
+	inventory := make(map[string]int)
 	return &GPlayer{
-		ID:        uuid.NewString(),
+		ID:        id,
 		Pos:       Vec2{X: x, Y: y},
 		Inventory: inventory,
 	}
 }
 
-func (p *GPlayer) AddToInventory(item *GItem, quantity int) {
-	for _, inventoryItem := range p.Inventory {
-		if inventoryItem.Item.ID == item.ID {
-			inventoryItem.Quantity += quantity
-			return
-		}
-	}
+func (p *GPlayer) AddToInventory(itemsAndAmount map[string]int) {
 
-	p.Inventory = append(p.Inventory, &GInventoryItem{Item: item, Quantity: quantity})
+	for itemID, amount := range itemsAndAmount {
+		_, exists := p.Inventory[itemID]
+		if !exists {
+			p.Inventory[itemID] = amount
+		} else {
+			p.Inventory[itemID] = p.Inventory[itemID] + amount
+		}
+
+	}
 }

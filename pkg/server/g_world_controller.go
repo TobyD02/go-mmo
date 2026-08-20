@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 
 	"github.com/tobyd02/golang-mmo/pkg/game"
+	"github.com/tobyd02/golang-mmo/pkg/registry"
 )
 
 type GWorldController struct {
@@ -34,6 +35,8 @@ func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getM
 func (wc *GWorldController) SetupWorld(
 	edgeWalls bool,
 ) {
+	lootPool := game.NewGLootPool([]string{"item.oak_wood", "item.oak_branch"})
+
 	for y, row := range wc.GameWorld.Map {
 		for x := range row {
 			if (x == 0 || x == wc.GameWorld.Width-1) || (y == 0 || y == wc.GameWorld.Height-1) {
@@ -45,7 +48,7 @@ func (wc *GWorldController) SetupWorld(
 
 				if x != wc.GameWorld.SpawnPoint.X && y != wc.GameWorld.SpawnPoint.Y {
 					if rand.IntN(100) == 1 {
-						wc.AddInteractable(game.NewGInteractable(x, y, game.TestItem))
+						wc.AddInteractable(game.NewGInteractable(x, y, lootPool))
 					}
 				}
 			}
@@ -117,12 +120,7 @@ func (wc *GWorldController) AddPlayer(playerID string, x, y int) error {
 		return fmt.Errorf("Cannot add player")
 	}
 
-	wc.addPlayer(&game.GPlayer{
-		ID: playerID,
-		Pos: game.Vec2{
-			X: x, Y: y,
-		},
-	})
+	wc.addPlayer(game.NewGPlayer(playerID, x, y))
 
 	wc.changedPlayers[playerID] = struct{}{}
 
@@ -196,15 +194,16 @@ func (wc *GWorldController) InteractWith(client *GServerClient, interactableID s
 	interactable.DoWork(wc.getServerTick())
 	wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("worked %s", interactable.ID))
 	if interactable.WorkIsDone() {
-		yield, yieldAmount := interactable.GetYieldAndTriggerCooldown()
-		player.AddToInventory(yield, yieldAmount)
+		yields := interactable.GetYieldAndTriggerCooldown()
+		player.AddToInventory(yields)
 
-		log.Printf("WORLD | Player %s inventory: %v", client.ID, player.Inventory)
+		for itemID, yield := range yields {
+			itemName := registry.GetItemName(itemID)
+			wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("Received %dx %s", yield, itemName))
+		}
 
-		wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("Received %dx %s", yieldAmount, yield.Name))
-
-		for _, i := range player.Inventory {
-			log.Printf("\t ITEM | %s | %v", i.Item.Name, i.Quantity)
+		if len(yields) == 0 {
+			wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprint("Received nothing"))
 		}
 	}
 

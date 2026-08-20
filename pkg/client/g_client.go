@@ -220,7 +220,7 @@ func (c *GClient) ProcessServerLogMessages() error {
 	return nil
 }
 
-// Must be called at the start of every client tick
+// Update - Must be called at the start of every client tick
 func (c *GClient) Update() {
 	c.drainMessages()
 }
