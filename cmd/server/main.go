@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/tobyd02/golang-mmo/pkg/game"
-	"github.com/tobyd02/golang-mmo/pkg/server"
+	"github.com/tobyd02/go-mmo/pkg/game"
+	"github.com/tobyd02/go-mmo/pkg/server"
 )
 
 func main() {

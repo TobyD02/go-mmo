@@ -6,8 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/google/uuid"
-	"github.com/tobyd02/golang-mmo/pkg/bbt_client"
-	"github.com/tobyd02/golang-mmo/pkg/client"
+	"github.com/tobyd02/go-mmo/pkg/bbt_client"
+	"github.com/tobyd02/go-mmo/pkg/client"
 )
 
 func main() {

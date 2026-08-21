@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/tobyd02/golang-mmo/pkg/client"
+	"github.com/tobyd02/go-mmo/pkg/client"
 )
 
 func main() {
