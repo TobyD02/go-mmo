@@ -11,7 +11,7 @@ import (
 	"github.com/tobyd02/go-mmo/pkg/messages"
 )
 
-const GClientTickSpeed = time.Millisecond * 10
+const GClientTickSpeed = time.Millisecond * 50
 
 type GClient struct {
 	conn     *websocket.Conn

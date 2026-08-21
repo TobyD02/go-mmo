@@ -91,13 +91,14 @@ func (n *GNpcInstance) Think(currentTick int, playerTarget *GPlayer, npcTarget *
 	n.LastPos = n.Pos
 
 	// Only move on 1 axis - if moving on both, randomly set 1 axis to 0
-	if moveDecision.LengthSquared() > 1 {
-		if rand.Float32() > 0.5 {
-			moveDecision.Y = 0
-		} else {
-			moveDecision.X = 0
-		}
-	}
+
+	// if moveDecision.LengthSquared() > 1 {
+	// if rand.Float32() > 0.5 {
+	// moveDecision.Y = 0
+	// } else {
+	// moveDecision.X = 0
+	// }
+	// }
 
 	return moveDecision
 }
@@ -142,7 +143,7 @@ func (n *GNpcInstance) canAttack(pos Vec2) bool {
 		return false
 	}
 
-	if pos.Distance(n.Pos) > 1 {
+	if pos.DistanceSquared(n.Pos) > 2 { // Distance squared 2 allows diagonals
 		return false // Cannot
 	}
 

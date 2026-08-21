@@ -16,6 +16,9 @@ import (
 type GameModel struct {
 	gameWorld *game.GameWorld
 	client    *client.GClient
+
+	moveInputDir     [4]int // up, down, left, right
+	interactInputDir [4]int // up, down, left, right
 }
 
 type ConnectionErrorMsg struct {
@@ -47,7 +50,7 @@ func (m GameModel) Init() tea.Cmd {
 	return tick()
 }
 
-func (m GameModel) interactDirection(dx, dy int) (tea.Model, tea.Cmd) {
+func (m GameModel) interactDirection(dx, dy int) {
 	self := m.gameWorld.Players[m.client.ClientID]
 
 	newX := self.Pos.X + dx
@@ -57,14 +60,16 @@ func (m GameModel) interactDirection(dx, dy int) (tea.Model, tea.Cmd) {
 	interactableInstance := m.gameWorld.QueryInteractableInstanceAtPosition(newX, newY)
 
 	if npcInstance != nil {
-		return m, BBTSendAttackNpcMessage(m.client, npcInstance.ID)
+		m.client.SendAttackNpcMessage(npcInstance.ID)
+		return
 	}
 
 	if interactableInstance != nil {
-		return m, BBTSendInteractMessage(m.client, interactableInstance.ID)
+		m.client.SendInteractMessage(interactableInstance.ID)
+		return
 	}
 
-	return m, nil
+	return
 }
 
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -84,6 +89,24 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			updateWorld(m.gameWorld, diff)
 		}
 
+		moveX := m.moveInputDir[3] - m.moveInputDir[2]
+		moveY := m.moveInputDir[1] - m.moveInputDir[0]
+
+		if moveX != 0 || moveY != 0 {
+			m.client.SendMoveMessage(moveX, moveY)
+		}
+
+		m.moveInputDir = [4]int{}
+
+		interactX := m.interactInputDir[3] - m.interactInputDir[2]
+		interactY := m.interactInputDir[1] - m.interactInputDir[0]
+
+		if interactX != 0 || interactY != 0 {
+			m.interactDirection(interactX, interactY)
+		}
+
+		m.interactInputDir = [4]int{}
+
 		_ = m.client.ProcessServerLogMessages()
 
 		return m, tick()
@@ -94,28 +117,29 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "w":
-			return m, BBTSendMoveMessage(m.client, 0, -1)
+			m.moveInputDir[0] = 1
 
 		case "s":
-			return m, BBTSendMoveMessage(m.client, 0, 1)
+			m.moveInputDir[1] = 1
 
 		case "a":
-			return m, BBTSendMoveMessage(m.client, -1, 0)
+			m.moveInputDir[2] = 1
 
 		case "d":
-			return m, BBTSendMoveMessage(m.client, 1, 0)
+			m.moveInputDir[3] = 1
 
 		case "up":
-			return m.interactDirection(0, -1)
+			m.interactInputDir[0] = 1
 
 		case "down":
-			return m.interactDirection(0, 1)
+			m.interactInputDir[1] = 1
 
 		case "left":
-			return m.interactDirection(-1, 0)
+			m.interactInputDir[2] = 1
 
 		case "right":
-			return m.interactDirection(1, 0)
+			m.interactInputDir[3] = 1
+
 		}
 
 	case ConnectionErrorMsg:

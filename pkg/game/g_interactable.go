@@ -81,7 +81,7 @@ func (i *GInteractableInstance) PlayerCanOccupyOrWork(player *GPlayer) bool {
 		return false
 	}
 
-	if player.Pos.Distance(i.Pos) > 1 {
+	if player.Pos.DistanceSquared(i.Pos) > 2 { // distance squared == 2 allows diagonals
 		return false // Cannot
 	}
 

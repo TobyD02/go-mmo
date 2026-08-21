@@ -228,7 +228,7 @@ func (s *GServer) GameLoop() {
 			peakTickSpeed = timeTaken
 		}
 		log.Printf(
-			"TICK | slowest: %v, took: %v, target: %v, clients: %v, clients (ro): %v",
+			"TICK | slowest: %-12v | took: %-12v | target: %-12v | clients: %-4v | clients (ro): %-4v",
 			peakTickSpeed,
 			timeTaken,
 			s.TickSpeed,
