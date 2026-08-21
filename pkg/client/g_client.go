@@ -6,7 +6,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/tobyd02/go-mmo/pkg/game"
 	"github.com/tobyd02/go-mmo/pkg/messages"
 )
@@ -14,7 +13,7 @@ import (
 const GClientTickSpeed = time.Millisecond * 50
 
 type GClient struct {
-	conn     *websocket.Conn
+	conn     ClientWebsocket
 	ClientID string
 	Logs     []*messages.GServerLogMessage
 	logLimit int
@@ -25,6 +24,7 @@ type GClient struct {
 	DrainedMessages map[messages.GMessageType][]*messages.GMessage
 
 	readOnly bool
+	done     chan struct{}
 }
 
 func NewGClient(readOnly bool) *GClient {
@@ -39,6 +39,8 @@ func NewGClient(readOnly bool) *GClient {
 		DrainedMessages: make(map[messages.GMessageType][]*messages.GMessage),
 
 		readOnly: readOnly,
+		conn:     NewClientWebsocket(),
+		done:     make(chan struct{}),
 	}
 }
 
@@ -48,16 +50,7 @@ func (c *GClient) connectToServer(serverURI string) error {
 		uri = uri + "/ro"
 	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(
-		uri,
-		nil,
-	)
-	if err != nil {
-		return err
-	}
-
-	c.conn = conn
-	return nil
+	return c.conn.Connect(uri)
 }
 
 func (c *GClient) Start(serverURI string, clientID string) (*game.GameWorld, error) {
@@ -111,14 +104,15 @@ func (c *GClient) WriteLoop() {
 		return // cannot write in read only mode
 	}
 
-	for message := range c.OutboundMessages {
-		err := c.conn.WriteMessage(
-			messages.GWebsocketMessageType,
-			message,
-		)
+	for {
+		select {
 
-		if err != nil {
-			log.Printf("Failed to write message: %s", err)
+		case message := <-c.OutboundMessages:
+			if err := c.conn.WriteMessage(message); err != nil {
+				log.Printf("Failed to write message: %s", err)
+				return
+			}
+		case <-c.done:
 			return
 		}
 	}
@@ -126,17 +120,34 @@ func (c *GClient) WriteLoop() {
 
 func (c *GClient) ReadLoop() {
 	for {
-		_, message, err := c.conn.ReadMessage()
+		message, err := c.conn.ReadMessage()
+
 		if err != nil {
-			fmt.Printf("READ ERROR: %T: %v", err, err)
+			select {
+			case <-c.done:
+				// expected - we expected the close
+			default:
+				fmt.Printf("READ ERROR: %T: %v", err, err)
+			}
+			close(c.done)
 			return
 		}
+		select {
+		case c.InboundMessages <- message:
+		case <-c.done:
+			return
 
-		c.InboundMessages <- message
+		}
 	}
 }
 
 func (c *GClient) StopAndCloseConnection() {
+	select {
+	case <-c.done:
+		// already closed
+	default:
+		close(c.done)
+	}
 	c.conn.Close()
 }
 
@@ -170,7 +181,7 @@ func (c *GClient) sendMessageSync(msg *messages.GMessage, err error) error {
 		return fmt.Errorf("failed to marshal message: %s", err)
 	}
 
-	err = c.conn.WriteMessage(messages.GWebsocketMessageType, data)
+	err = c.conn.WriteMessage(data)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %s", err)
 	}
@@ -200,7 +211,7 @@ func (c *GClient) sendMessage(msg *messages.GMessage, err error) error {
 }
 
 func (c *GClient) readMessage() (*messages.GMessage, error) {
-	_, message, err := c.conn.ReadMessage()
+	message, err := c.conn.ReadMessage()
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to read message from server %s", err)

@@ -86,11 +86,19 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 
 	s.clientsMutex.Lock()
 
+	if client.ID == "" {
+		s.clientsMutex.Unlock()
+
+		log.Printf("client attempted to connect with empty ID")
+		client.Close()
+		return
+	}
+
 	if _, exists := s.Clients[client.ID]; exists {
 		s.clientsMutex.Unlock()
 
 		log.Printf("client already connected: %s", client.ID)
-
+		client.Close()
 		return
 	}
 
@@ -111,7 +119,7 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 
 	err = client.ReadLoop()
 	if err != nil {
-		fmt.Printf("client disconnected %s", client.ID)
+		fmt.Printf("client disconnected %s (%s)\n", client.ID, err)
 	}
 }
 

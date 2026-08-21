@@ -1,5 +1,14 @@
 # Concept
 
+## Building (web)
+
+```bash
+GOOS=js GOARCH=wasm go build -o web/headless.wasm ./cmd/headless_client
+
+# Then run a web server
+python3 -m http.server -d web/ 8000
+```
+
 ## Running client swarm
 
 1. Run server and build image
