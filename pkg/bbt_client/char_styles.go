@@ -18,11 +18,10 @@ var TileStyles = map[game.GameWorldTile]lipgloss.Style{
 }
 
 var (
-	selfChar                 = "MM"
-	otherChar                = "@@"
-	interactableChar         = "II"
-	interactableCooldownChar = "||"
-	npcChar                  = "OO"
+	selfChar         = "MM"
+	otherChar        = "@@"
+	interactableChar = "II"
+	npcChar          = "OO"
 )
 
 var selfStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#499953")).Bold(true)
@@ -51,25 +50,58 @@ func drawOther(b *strings.Builder) {
 	b.WriteString(otherStyle.Render(otherChar))
 }
 
-func drawNpc(b *strings.Builder, npcPlayerTargetID string, clientID string) {
+func drawNpc(b *strings.Builder, npcInstance *game.GNpcInstance, clientID string) {
 
-	if npcPlayerTargetID == clientID {
-		b.WriteString(npcTargettingStyle.Render(npcChar))
+	char := getNpcChar(npcInstance.NpcID)
+
+	if npcInstance.PlayerTargetID == clientID {
+		b.WriteString(npcTargettingStyle.Render(char))
 	} else {
-		b.WriteString(npcStyle.Render(npcChar))
+		b.WriteString(npcStyle.Render(char))
 	}
 }
 
-func drawInteractable(b *strings.Builder, occupiedBy string, clientID string) {
-	if occupiedBy == "" {
-		b.WriteString(interactableStyle.Render(interactableChar))
-	} else if occupiedBy == clientID {
-		b.WriteString(interactableOccupiedStyle.Render(interactableChar))
-	} else {
-		b.WriteString(interactableOccupiedOtherStyle.Render(interactableChar))
+func drawInteractable(b *strings.Builder, interactableInstance *game.GInteractableInstance, clientID string) {
+	char := getInteractableChar(interactableInstance.InteractableID)
+
+	if interactableInstance.CurrentTickCooldown > 0 {
+		b.WriteString(interactableCooldownStyle.Render(char))
+		return
+	}
+
+	occupiedBy := interactableInstance.OccupiedBy
+	switch occupiedBy {
+	case "":
+		b.WriteString(interactableStyle.Render(char))
+	case clientID:
+		b.WriteString(interactableOccupiedStyle.Render(char))
+	default:
+		b.WriteString(interactableOccupiedOtherStyle.Render(char))
 	}
 }
 
-func drawInteractableCooldown(b *strings.Builder) {
-	b.WriteString(interactableCooldownStyle.Render(interactableCooldownChar))
+func getInteractableChar(interactableID string) string {
+	switch interactableID {
+	case "interactable.gold_deposit":
+		return "GG"
+
+	case "interactable.oak_tree":
+		return "TT"
+
+	default:
+		return interactableChar
+	}
+}
+
+func getNpcChar(npcID string) string {
+	switch npcID {
+	case "npc.chicken":
+		return "cc"
+
+	case "npc.cow":
+		return "CC"
+
+	default:
+		return npcChar
+	}
 }

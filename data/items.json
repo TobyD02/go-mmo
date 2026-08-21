@@ -16,5 +16,14 @@
   },
   "item.raw_hide": {
     "name": "Raw Hide"
+  },
+  "item.raw_steak": {
+    "name": "Raw Steak"
+  },
+  "item.gold_ore": {
+    "name": "Gold Ore"
+  },
+  "item.stone": {
+    "name": "Stone"
   }
 }

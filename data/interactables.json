@@ -1,9 +1,9 @@
 {
   "interactable.oak_tree": {
     "name": "Oak Tree",
-    "max_tick_cooldown": 60,
+    "max_tick_cooldown": 20,
     "tick_work_for_yield": 5,
-    "max_occupant_cooldown": 30,
+    "max_occupant_cooldown": 5,
     "loot_pool": [
       {
         "item_id": "item.oak_wood",
@@ -16,6 +16,26 @@
         "yield_amount_min": 1,
         "yield_amount_max": 5,
         "yield_chance": 0.8
+      }
+    ]
+  },
+  "interactable.gold_deposit": {
+    "name": "Gold Deposit",
+    "max_tick_cooldown": 40,
+    "tick_work_for_yield": 7,
+    "max_occupant_cooldown": 5,
+    "loot_pool": [
+      {
+        "item_id": "item.stone",
+        "yield_amount_min": 1,
+        "yield_amount_max": 3,
+        "yield_chance": 0.8
+      },
+      {
+        "item_id": "item.gold_ore",
+        "yield_amount_min": 1,
+        "yield_amount_max": 1,
+        "yield_chance": 1
       }
     ]
   }

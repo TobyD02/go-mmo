@@ -179,16 +179,12 @@ func (m GameModel) View() tea.View {
 			}
 
 			if interactable != nil {
-				if interactable.CurrentTickCooldown <= 0 {
-					drawInteractable(&world, interactable.OccupiedBy, client.ID)
-				} else {
-					drawInteractableCooldown(&world)
-				}
+				drawInteractable(&world, interactable, client.ID)
 				continue
 			}
 
 			if npc != nil {
-				drawNpc(&world, npc.PlayerTargetID, client.ID)
+				drawNpc(&world, npc, client.ID)
 				continue
 			}
 

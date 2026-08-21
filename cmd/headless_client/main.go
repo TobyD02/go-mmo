@@ -61,8 +61,7 @@ func main() {
 
 		if diff != nil && !diff.IsEmpty() {
 			log.Printf(
-				"Received world diff: %+v",
-				diff,
+				"Received world diff: %s", time.Now(),
 			)
 		}
 		// c.SendMoveMessage(rand.IntN(3)-1, rand.IntN(3)-1)

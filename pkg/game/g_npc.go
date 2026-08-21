@@ -1,7 +1,6 @@
 package game
 
 import (
-	"log"
 	"math/rand/v2"
 
 	"github.com/google/uuid"
@@ -140,17 +139,14 @@ func (n *GNpcInstance) PlayerCanAttack(player *GPlayer) bool {
 func (n *GNpcInstance) canAttack(pos Vec2) bool {
 	npc := GetNpcFromRegistry(n.NpcID)
 	if npc == nil {
-		log.Println("cannot find npc")
 		return false
 	}
 
 	if pos.Distance(n.Pos) > 1 {
-		log.Println("too far")
 		return false // Cannot
 	}
 
 	if n.Health <= 0 {
-		log.Println("health is <= 0")
 		return false // Npc is on cooldown
 	}
 

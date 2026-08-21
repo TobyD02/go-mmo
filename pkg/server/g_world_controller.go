@@ -36,6 +36,17 @@ func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getM
 func (wc *GWorldController) SetupWorld(
 	edgeWalls bool,
 ) {
+
+	npcRegistry, err := game.GetNpcRegistry()
+	if err != nil {
+		log.Fatalf("failed to get npc registry")
+	}
+
+	interactableRegistry, err := game.GetInteractableRegistry()
+	if err != nil {
+		log.Fatalf("failed to get npc registry")
+	}
+
 	for y, row := range wc.GameWorld.Map {
 		for x := range row {
 			if (x == 0 || x == wc.GameWorld.Width-1) || (y == 0 || y == wc.GameWorld.Height-1) {
@@ -48,9 +59,17 @@ func (wc *GWorldController) SetupWorld(
 				if x != wc.GameWorld.SpawnPoint.X && y != wc.GameWorld.SpawnPoint.Y {
 					randInt := rand.IntN(100)
 					if randInt == 1 {
-						wc.AddInteractable(game.NewGInteractableInstance("interactable.oak_tree", x, y))
+						interactableID, err := game.GetRandomIDFromRegistry(interactableRegistry)
+						if err != nil {
+							continue
+						}
+						wc.AddInteractable(game.NewGInteractableInstance(interactableID, x, y))
 					} else if randInt == 2 {
-						wc.AddNpc(game.NewGNpcInstance("npc.chicken", x, y))
+						npcID, err := game.GetRandomIDFromRegistry(npcRegistry)
+						if err != nil {
+							continue
+						}
+						wc.AddNpc(game.NewGNpcInstance(npcID, x, y))
 					}
 				}
 			}
@@ -320,18 +339,15 @@ func (wc *GWorldController) DoTickers() {
 func (wc *GWorldController) AttackNpc(client *GServerClient, npcInstanceID string) {
 	player, exists := wc.GameWorld.Players[client.ID]
 	if !exists { // Safe guard
-		log.Println("Returned because player doesn't exist")
 		return
 	}
 
 	npcInstance, exists := wc.GameWorld.Npcs[npcInstanceID]
 	if !exists { // Safe guard
-		log.Println("Returned because npc doesn't exist")
 		return
 	}
 
 	if !npcInstance.PlayerCanAttack(player) {
-		log.Println("Returned because player cannot attack npc")
 		return
 	}
 
