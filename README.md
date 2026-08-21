@@ -2,11 +2,16 @@
 
 ## Building (web)
 
-```bash
-GOOS=js GOARCH=wasm go build -o web/headless.wasm ./cmd/headless_client
+1. Runs the POC ebit client in web browser (http://localhost:8081)
 
-# Then run a web server
-python3 -m http.server -d web/ 8000
+```bash
+go run github.com/hajimehoshi/wasmserve@latest -http=localhost:8081 ./cmd/ebit_client/
+```
+
+2. Alternatively, Running the following command will run a native ebit client
+
+```
+go run cmd/ebit_client/
 ```
 
 ## Running client swarm
