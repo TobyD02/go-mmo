@@ -16,9 +16,16 @@ import (
 
 const tileSize = 16
 
+type RenderPosition struct {
+	x float64
+	y float64
+}
+
 type Game struct {
 	gameWorld *game.GameWorld
 	client    *client.GClient
+
+	renderPositions map[string]RenderPosition
 }
 
 func NewGame(serverURI, clientID string) (*Game, error) {
@@ -29,17 +36,25 @@ func NewGame(serverURI, clientID string) (*Game, error) {
 		return nil, err
 	}
 
-	return &Game{
-		gameWorld: world,
-		client:    c,
-	}, nil
+	g := &Game{
+		gameWorld:       world,
+		client:          c,
+		renderPositions: make(map[string]RenderPosition),
+	}
+
+	for id, player := range world.Players {
+		g.renderPositions[id] = RenderPosition{
+			x: float64(player.Pos.X * tileSize),
+			y: float64(player.Pos.Y * tileSize),
+		}
+	}
+
+	return g, nil
 }
 
 func (g *Game) Update() error {
-	// Process incoming server data.
 	g.client.Update()
 
-	// Send a random movement every Ebitengine tick.
 	moveX := rand.Intn(3) - 1
 	moveY := rand.Intn(3) - 1
 
@@ -48,7 +63,6 @@ func (g *Game) Update() error {
 		g.client.SendMoveMessage(moveX, moveY)
 	}
 
-	// Read incoming world changes.
 	diff, err := g.client.ReadGameWorldDiff()
 	if err != nil {
 		return err
@@ -59,18 +73,43 @@ func (g *Game) Update() error {
 		g.gameWorld.ApplyDiff(diff)
 	}
 
+	// Lerp every connected player toward their server position.
+	for id, player := range g.gameWorld.Players {
+		targetX := float64(player.Pos.X * tileSize)
+		targetY := float64(player.Pos.Y * tileSize)
+
+		render, exists := g.renderPositions[id]
+		if !exists {
+			render = RenderPosition{
+				x: targetX,
+				y: targetY,
+			}
+		}
+
+		render.x += (targetX - render.x) * 0.15
+		render.y += (targetY - render.y) * 0.15
+
+		g.renderPositions[id] = render
+	}
+
+	// Remove render positions for disconnected players.
+	for id := range g.renderPositions {
+		if _, exists := g.gameWorld.Players[id]; !exists {
+			delete(g.renderPositions, id)
+		}
+	}
+
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	for _, player := range g.gameWorld.Players {
-		x := float64(player.Pos.X * tileSize)
-		y := float64(player.Pos.Y * tileSize)
+	for id := range g.gameWorld.Players {
+		render := g.renderPositions[id]
 
 		ebitenutil.DrawRect(
 			screen,
-			x,
-			y,
+			render.x,
+			render.y,
 			tileSize,
 			tileSize,
 			color.White,
