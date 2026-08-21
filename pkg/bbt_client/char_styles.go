@@ -33,10 +33,11 @@ var interactableOccupiedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#
 var interactableOccupiedOtherStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#c2a065")).Bold(true)
 var interactableCooldownStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#1a3847")).Bold(true)
 
-var gameStyle = lipgloss.NewStyle().Width(128).Height(40).Border(lipgloss.NormalBorder())
-var worldStyle = lipgloss.NewStyle().Width(128).Height(28)
-var logStyle = lipgloss.NewStyle().Width(96).Height(12).Border(lipgloss.NormalBorder(), true, false, false, false)
-var inventoryStyle = lipgloss.NewStyle().Width(32).Height(12).Border(lipgloss.NormalBorder(), true, true, false, false)
+var gameStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderTop(true).BorderBottom(true).BorderLeft(true).BorderRight(true)
+var worldStyle = lipgloss.NewStyle().Width(128).Height(31).Border(lipgloss.NormalBorder(), false, false, true, false)
+var inventoryStyle = lipgloss.NewStyle().Width(27).Height(11).Border(lipgloss.NormalBorder(), false, true, false, false)
+var logStyle = lipgloss.NewStyle().Width(100).Height(11)
+var chatStyle = lipgloss.NewStyle().Width(128).Height(2).Border(lipgloss.NormalBorder(), true, false, false, false)
 
 func drawTile(b *strings.Builder, tile game.GameWorldTile) {
 	b.WriteString(TileStyles[tile].Render(TileChars[tile]))

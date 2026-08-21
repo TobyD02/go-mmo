@@ -3,9 +3,11 @@ package bbt_client
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 
@@ -19,6 +21,11 @@ type GameModel struct {
 
 	moveInputDir     [4]int // up, down, left, right
 	interactInputDir [4]int // up, down, left, right
+
+	chatInput  textinput.Model
+	chatActive bool
+
+	chatOutput string
 }
 
 type ConnectionErrorMsg struct {
@@ -31,9 +38,18 @@ func InitialModel(
 	gameWorld *game.GameWorld,
 	client *client.GClient,
 ) GameModel {
+
+	chatInput := textinput.New()
+	// chatInput.Placeholder = "Type a command"
+	chatInput.SetValue("/")
+	chatInput.CharLimit = 200
+
 	return GameModel{
 		gameWorld: gameWorld,
 		client:    client,
+
+		chatInput:  chatInput,
+		chatOutput: "",
 	}
 }
 
@@ -112,9 +128,40 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tick()
 
 	case tea.KeyPressMsg:
+		if m.chatActive {
+			switch msg.String() {
+			case "enter":
+				message := strings.TrimSpace(m.chatInput.Value())
+				if message != "" {
+					m.chatOutput = m.doCmd(message)
+				}
+
+				m.chatInput.SetValue("/")
+				m.chatInput.Blur()
+				m.chatActive = false
+
+				return m, nil
+
+			case "esc":
+				m.chatInput.SetValue("/")
+				m.chatInput.Blur()
+				m.chatActive = false
+
+				return m, nil
+			}
+
+			var cmd tea.Cmd
+			m.chatInput, cmd = m.chatInput.Update(msg)
+			return m, cmd
+		}
+
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
+
+		case "/":
+			m.chatActive = true
+			return m, m.chatInput.Focus()
 
 		case "w":
 			m.moveInputDir[0] = 1
@@ -162,7 +209,7 @@ func (m GameModel) View() tea.View {
 	var inventory strings.Builder
 
 	viewportWidth := 64
-	viewportHeight := 32
+	viewportHeight := 31
 
 	client := m.gameWorld.Players[m.client.ClientID]
 	if client == nil {
@@ -219,12 +266,14 @@ func (m GameModel) View() tea.View {
 	}
 
 	for i := range m.client.Logs {
-		if i < 10 {
+		if i < 9 {
 			logMessage := m.client.Logs[len(m.client.Logs)-i-1]
 			msg := fmt.Sprintf("%s | %s\n", logMessage.Scope, logMessage.Message)
 			log.WriteString(msg)
 		}
 	}
+
+	log.WriteString(fmt.Sprintf("CMD | %s", m.chatOutput))
 
 	// Draw pos at top of inventory
 	fmt.Fprintf(&inventory, "x: %d | y : %d\n", centerX, centerY)
@@ -242,21 +291,66 @@ func (m GameModel) View() tea.View {
 		fmt.Fprintf(&inventory, "%s | %d\n", name, amount)
 	}
 
+	chatContent := "> "
+	if m.chatActive {
+		chatContent = m.chatInput.View()
+	} else {
+		chatContent = "Press /"
+	}
+
+	chatContent = chatStyle.Render(chatContent)
+
 	worldContent := worldStyle.Render(world.String())
-
 	inventoryContent := inventoryStyle.Render(inventory.String())
-
 	logContent := logStyle.Render(log.String())
-
 	bottomContent := lipgloss.JoinHorizontal(lipgloss.Top, inventoryContent, logContent)
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		worldContent,
 		bottomContent,
+		chatContent,
 	)
 
 	return tea.NewView(gameStyle.Render(content))
 
 	// return tea.NewView(lipgloss.JoinVertical(lipgloss.Left, worldStyle.Render(world.String())+"\n"+logStyle.Render(log.String())))
+}
+
+func (m GameModel) doCmd(msg string) string {
+	isCmd := strings.HasPrefix(msg, "/")
+	if !isCmd {
+		return "not a valid command"
+	}
+
+	parts := strings.Fields(msg)
+	command := parts[0]
+	args := parts[1:]
+
+	switch command {
+	case "/move":
+		if len(args) != 2 {
+			return "usage: /move <x> <y>"
+		}
+
+		x, err := strconv.Atoi(args[0])
+		if err != nil {
+			return "x must be a number"
+		}
+
+		y, err := strconv.Atoi(args[1])
+		if err != nil {
+			return "y must be a number"
+		}
+
+		if x < -1 || x > 1 || y < -1 || y > 1 {
+			return "x and y must be -1, 0, or 1"
+		}
+
+		m.client.SendMoveMessage(x, y)
+
+		return fmt.Sprintf("Sent move command: dx %d, dy %d", x, y)
+	}
+
+	return ""
 }
