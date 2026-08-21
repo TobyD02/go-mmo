@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/tobyd02/golang-mmo/pkg/client"
-	"github.com/tobyd02/golang-mmo/pkg/game"
+	"github.com/tobyd02/go-mmo/pkg/client"
+	"github.com/tobyd02/go-mmo/pkg/game"
 )
 
 type GameModel struct {

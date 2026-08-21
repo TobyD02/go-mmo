@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/tobyd02/golang-mmo/pkg/game"
+	"github.com/tobyd02/go-mmo/pkg/game"
 )
 
 type GServerWorldDiffMessage struct {

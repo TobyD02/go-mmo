@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/tobyd02/golang-mmo/pkg/game"
-	"github.com/tobyd02/golang-mmo/pkg/messages"
+	"github.com/tobyd02/go-mmo/pkg/game"
+	"github.com/tobyd02/go-mmo/pkg/messages"
 )
 
 type GMessageRouter struct {

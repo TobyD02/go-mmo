@@ -5,7 +5,7 @@ import (
 	"log"
 	"math/rand/v2"
 
-	"github.com/tobyd02/golang-mmo/pkg/game"
+	"github.com/tobyd02/go-mmo/pkg/game"
 )
 
 type GWorldController struct {

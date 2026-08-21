@@ -1,4 +1,4 @@
-module github.com/tobyd02/golang-mmo
+module github.com/tobyd02/go-mmo
 
 go 1.26.4
 

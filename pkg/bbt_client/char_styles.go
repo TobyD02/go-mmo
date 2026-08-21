@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/tobyd02/golang-mmo/pkg/game"
+	"github.com/tobyd02/go-mmo/pkg/game"
 )
 
 var TileChars = map[game.GameWorldTile]string{

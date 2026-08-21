@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/tobyd02/golang-mmo/pkg/game"
-	"github.com/tobyd02/golang-mmo/pkg/messages"
+	"github.com/tobyd02/go-mmo/pkg/game"
+	"github.com/tobyd02/go-mmo/pkg/messages"
 )
 
 const GClientTickSpeed = time.Millisecond * 10
