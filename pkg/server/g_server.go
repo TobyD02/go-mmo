@@ -361,10 +361,17 @@ func (s *GServer) handleMessages(
 		case messages.TClientInteractMessage:
 			interactData, err := messages.ParseGClientInteractMessageData(message.Data)
 			if err != nil {
-				log.Printf("error: failed to parse move data")
+				log.Printf("error: failed to parse interact data")
 			}
 
-			s.WorldController.InteractWith(client, interactData.InteractableID)
+			s.WorldController.InteractWith(client, interactData.InteractableInstanceID)
+		case messages.TClientAttackNpcMessage:
+			attackNpcData, err := messages.ParseGClientAttackNpcMessageData(message.Data)
+			if err != nil {
+				log.Printf("error: failed to parse attack npc data")
+			}
+
+			s.WorldController.AttackNpc(client, attackNpcData.NpcInstanceID)
 		}
 
 	}

@@ -149,8 +149,12 @@ func (c *GClient) SendMoveMessage(dx, dy int) error {
 	return c.sendMessage(messages.NewGClientMoveMessage(dx, dy))
 }
 
-func (c *GClient) SendInteractMessage(interactableID string) error {
-	return c.sendMessage(messages.NewGClientInteractMessage(interactableID))
+func (c *GClient) SendInteractMessage(interactableInstanceID string) error {
+	return c.sendMessage(messages.NewGClientInteractMessage(interactableInstanceID))
+}
+
+func (c *GClient) SendAttackNpcMessage(npcInstanceID string) error {
+	return c.sendMessage(messages.NewGClientAttackNpcMessage(npcInstanceID))
 }
 
 // sendMessageSync - Sends a message synchronously (doesn't use the write loop goroutine)

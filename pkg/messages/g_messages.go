@@ -17,6 +17,8 @@ const (
 	TClientConnectedMessage GMessageType = iota
 	TClientMoveMessage
 	TClientInteractMessage
+	TClientAttackNpcMessage
+
 	TServerInitialWorldStateMessage
 	TServerWorldDiffMessage
 	TServerLogMessage

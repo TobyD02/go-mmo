@@ -98,7 +98,7 @@ func (g *GameWorld) QueryPlayersAtPosition(x, y int) map[string]*GPlayer {
 	return players
 }
 
-func (g *GameWorld) QueryInteractableAtPosition(x, y int) *GInteractableInstance { // singular since there can only be one
+func (g *GameWorld) QueryInteractableInstanceAtPosition(x, y int) *GInteractableInstance { // singular since there can only be one
 	for _, i := range g.Interactables {
 		if i.Pos.X == x && i.Pos.Y == y {
 			return i
@@ -108,7 +108,7 @@ func (g *GameWorld) QueryInteractableAtPosition(x, y int) *GInteractableInstance
 	return nil
 }
 
-func (g *GameWorld) QueryNpcAtPosition(x, y int) *GNpcInstance { // singular since there can only be one
+func (g *GameWorld) QueryNpcInstanceAtPosition(x, y int) *GNpcInstance { // singular since there can only be one
 	for _, i := range g.Npcs {
 		if i.Pos.X == x && i.Pos.Y == y {
 			return i

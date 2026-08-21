@@ -28,9 +28,20 @@ func BBTSendMoveMessage(c *client.GClient, dx, dy int) tea.Cmd {
 	}
 }
 
-func BBTSendInteractMessage(c *client.GClient, interactableID string) tea.Cmd {
+func BBTSendInteractMessage(c *client.GClient, interactableInstanceID string) tea.Cmd {
 	return func() tea.Msg {
-		err := c.SendInteractMessage(interactableID)
+		err := c.SendInteractMessage(interactableInstanceID)
+		if err != nil {
+			return ConnectionErrorMsg{Err: err}
+		}
+
+		return nil
+	}
+}
+
+func BBTSendAttackNpcMessage(c *client.GClient, npcInstanceID string) tea.Cmd {
+	return func() tea.Msg {
+		err := c.SendAttackNpcMessage(npcInstanceID)
 		if err != nil {
 			return ConnectionErrorMsg{Err: err}
 		}

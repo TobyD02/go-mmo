@@ -5,12 +5,20 @@
       {
         "item_id": "item.feather",
         "yield_amount_min": 1,
-        "yield_amount_max": 3,
+        "yield_amount_max": 5,
+        "yield_chance": 0.7
+      },
+      {
+        "item_id": "item.raw_chicken",
+        "yield_amount_min": 1,
+        "yield_amount_max": 1,
         "yield_chance": 1
       }
     ],
     "aggressive": false,
     "will_flee": false,
-    "think_tick_frequency": 5
+    "patrol_speed": 20,
+    "combat_speed": 5,
+    "max_health": 10
   }
 }

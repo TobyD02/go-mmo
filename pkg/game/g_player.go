@@ -1,5 +1,7 @@
 package game
 
+import "math/rand/v2"
+
 type GPlayer struct {
 	ID        string         `json:"id"`
 	Pos       Vec2           `json:"pos"`
@@ -27,4 +29,8 @@ func (p *GPlayer) AddToInventory(itemsAndAmount map[string]int) {
 		}
 
 	}
+}
+
+func (p *GPlayer) DoDamage() int {
+	return rand.IntN(4) + 1
 }

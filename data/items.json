@@ -11,6 +11,9 @@
   "item.feather": {
     "name": "Feather"
   },
+  "item.raw_chicken": {
+    "name": "Raw Chicken"
+  },
   "item.raw_hide": {
     "name": "Raw Hide"
   }

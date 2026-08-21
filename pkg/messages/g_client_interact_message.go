@@ -6,17 +6,17 @@ import (
 )
 
 type GClientInteractMessage struct {
-	InteractableID string `json:"interactable_id"`
+	InteractableInstanceID string `json:"interactable_instance_id"`
 }
 
 func (m GClientInteractMessage) MessageName() string {
 	return "interact action"
 }
 
-func NewGClientInteractMessage(interactableID string) (*GMessage, error) {
+func NewGClientInteractMessage(interactableInstanceID string) (*GMessage, error) {
 
 	data, err := json.Marshal(GClientInteractMessage{
-		InteractableID: interactableID,
+		InteractableInstanceID: interactableInstanceID,
 	})
 
 	if err != nil {

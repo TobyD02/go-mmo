@@ -114,7 +114,7 @@ func (wc *GWorldController) BuildWorldDiff() game.GameWorldDiff {
 }
 
 func (wc *GWorldController) AddInteractable(interactable *game.GInteractableInstance) {
-	if wc.GameWorld.QueryInteractableAtPosition(interactable.Pos.X, interactable.Pos.Y) != nil {
+	if wc.GameWorld.QueryInteractableInstanceAtPosition(interactable.Pos.X, interactable.Pos.Y) != nil {
 		return // Only a single interactable in a tile
 	}
 	if wc.GameWorld.QueryMap(interactable.Pos.X, interactable.Pos.Y) != game.TileWalkable {
@@ -132,6 +132,16 @@ func (wc *GWorldController) AddNpc(npc *game.GNpcInstance) {
 
 	wc.GameWorld.Npcs[npc.ID] = npc
 	wc.changedNpcs[npc.ID] = struct{}{}
+}
+
+func (wc *GWorldController) DeleteNpc(npcID string) {
+	if _, exists := wc.GameWorld.Npcs[npcID]; !exists {
+		return
+	}
+
+	delete(wc.GameWorld.Npcs, npcID)
+
+	wc.changedNpcs[npcID] = struct{}{}
 }
 
 func (wc *GWorldController) SpawnNewPlayer(playerID string) error {
@@ -186,7 +196,7 @@ func (wc *GWorldController) MovePlayer(client *GServerClient, dx, dy int) {
 		return // Cannot move to unwalkable tile
 	}
 
-	if wc.GameWorld.QueryInteractableAtPosition(newX, newY) != nil {
+	if wc.GameWorld.QueryInteractableInstanceAtPosition(newX, newY) != nil {
 		return // Cannot move over interactables?
 	}
 
@@ -221,7 +231,7 @@ func (wc *GWorldController) MoveNpc(npcInstanceID string, dx, dy int) {
 		return // Cannot move to unwalkable tile
 	}
 
-	if wc.GameWorld.QueryInteractableAtPosition(newX, newY) != nil {
+	if wc.GameWorld.QueryInteractableInstanceAtPosition(newX, newY) != nil {
 		return // Cannot move over interactables?
 	}
 
@@ -267,7 +277,7 @@ func (wc *GWorldController) InteractWith(client *GServerClient, interactableInst
 		}
 
 		if len(yields) == 0 {
-			wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprint("Received nothing"))
+			wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", "Received nothing")
 		}
 	}
 
@@ -307,29 +317,83 @@ func (wc *GWorldController) DoTickers() {
 	}
 }
 
+func (wc *GWorldController) AttackNpc(client *GServerClient, npcInstanceID string) {
+	player, exists := wc.GameWorld.Players[client.ID]
+	if !exists { // Safe guard
+		log.Println("Returned because player doesn't exist")
+		return
+	}
+
+	npcInstance, exists := wc.GameWorld.Npcs[npcInstanceID]
+	if !exists { // Safe guard
+		log.Println("Returned because npc doesn't exist")
+		return
+	}
+
+	if !npcInstance.PlayerCanAttack(player) {
+		log.Println("Returned because player cannot attack npc")
+		return
+	}
+
+	dmg := npcInstance.TakePlayerDamage(player)
+	npc := game.GetNpcFromRegistry(npcInstance.NpcID)
+
+	npcName := ""
+	npcMaxHealth := 0
+	if npc != nil {
+		npcName = npc.Name
+		npcMaxHealth = npc.MaxHealth
+	}
+
+	wc.getMessageRouter().PushClientLogMessage(
+		client.ID,
+		"CLIENT",
+		fmt.Sprintf("Dealt %d dmg to %s | %s health: %d/%d", dmg, npcName, npcName, npcInstance.Health, npcMaxHealth),
+	)
+
+	wc.changedNpcs[npcInstance.ID] = struct{}{}
+
+	if npcInstance.Health <= 0 {
+		npcLoot := npcInstance.GetLoot()
+		player.AddToInventory(npcLoot)
+
+		for itemID, amount := range npcLoot {
+			itemName := game.GetItemNameFromRegistry(itemID)
+			wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("Received %dx %s", amount, itemName))
+		}
+
+		wc.DeleteNpc(npcInstance.ID)
+	}
+
+}
+
 func (wc *GWorldController) DoNpcs() {
 
 	for npcInstanceID, npcInstance := range wc.GameWorld.Npcs {
 		npc := game.GetNpcFromRegistry(npcInstance.NpcID)
 		if npc == nil {
-			return
+			continue
 		}
 
-		if wc.getServerTick()-npcInstance.LastTickUpdated < npc.TickThinkFrequency {
-			return
+		serverTick := wc.getServerTick()
+		if !npcInstance.CanDoCombat(serverTick) && !npcInstance.CanDoPatrol(serverTick) {
+			continue
 		}
 
-		delta := npcInstance.Think(wc.getServerTick())
+		playerTarget := wc.GameWorld.Players[npcInstance.PlayerTargetID]
+		npcTarget := wc.GameWorld.Npcs[npcInstance.NpcTargetID]
+
+		delta := npcInstance.Think(wc.getServerTick(), playerTarget, npcTarget)
 
 		newX := npcInstance.Pos.X + delta.X
 		newY := npcInstance.Pos.Y + delta.Y
 
-		if free := wc.GameWorld.QueryInteractableAtPosition(newX, newY); free != nil {
-			return
+		if free := wc.GameWorld.QueryInteractableInstanceAtPosition(newX, newY); free != nil {
+			continue
 		}
 
 		if free := wc.GameWorld.QueryMap(newX, newY); free != game.TileWalkable {
-			return
+			continue
 		}
 
 		if delta.X != 0 || delta.Y != 0 {

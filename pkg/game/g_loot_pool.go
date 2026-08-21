@@ -37,7 +37,12 @@ func (l *GLootPool) GetYield() map[string]int {
 			continue
 		}
 
-		yieldAmount := rand.IntN(loot.YieldAmountMax-loot.YieldAmountMin) + loot.YieldAmountMin
+		yieldAmount := loot.YieldAmountMin
+		if loot.YieldAmountMin != loot.YieldAmountMax {
+			// rand.IntN isn't inclusive on the upper end - so + 1
+			yieldAmount += rand.IntN(loot.YieldAmountMax - loot.YieldAmountMin + 1)
+		}
+
 		yields[loot.ItemID] = yieldAmount
 	}
 

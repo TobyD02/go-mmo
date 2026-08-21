@@ -49,10 +49,19 @@ func (m GameModel) Init() tea.Cmd {
 
 func (m GameModel) interactDirection(dx, dy int) (tea.Model, tea.Cmd) {
 	self := m.gameWorld.Players[m.client.ClientID]
-	interactable := m.gameWorld.QueryInteractableAtPosition(self.Pos.X+dx, self.Pos.Y+dy)
 
-	if interactable != nil {
-		return m, BBTSendInteractMessage(m.client, interactable.ID)
+	newX := self.Pos.X + dx
+	newY := self.Pos.Y + dy
+
+	npcInstance := m.gameWorld.QueryNpcInstanceAtPosition(newX, newY)
+	interactableInstance := m.gameWorld.QueryInteractableInstanceAtPosition(newX, newY)
+
+	if npcInstance != nil {
+		return m, BBTSendAttackNpcMessage(m.client, npcInstance.ID)
+	}
+
+	if interactableInstance != nil {
+		return m, BBTSendInteractMessage(m.client, interactableInstance.ID)
 	}
 
 	return m, nil
@@ -156,8 +165,8 @@ func (m GameModel) View() tea.View {
 			}
 
 			players := m.gameWorld.QueryPlayersAtPosition(x, y)
-			interactable := m.gameWorld.QueryInteractableAtPosition(x, y)
-			npc := m.gameWorld.QueryNpcAtPosition(x, y)
+			interactable := m.gameWorld.QueryInteractableInstanceAtPosition(x, y)
+			npc := m.gameWorld.QueryNpcInstanceAtPosition(x, y)
 
 			if len(players) > 0 {
 				if players[m.client.ClientID] != nil {
@@ -179,7 +188,7 @@ func (m GameModel) View() tea.View {
 			}
 
 			if npc != nil {
-				drawNpc(&world)
+				drawNpc(&world, npc.PlayerTargetID, client.ID)
 				continue
 			}
 
@@ -197,6 +206,9 @@ func (m GameModel) View() tea.View {
 		}
 	}
 
+	// Draw pos at top of inventory
+	fmt.Fprintf(&inventory, "x: %d | y : %d\n", centerX, centerY)
+
 	itemIDs := make([]string, 0, len(client.Inventory))
 
 	for itemID := range client.Inventory {
@@ -204,13 +216,10 @@ func (m GameModel) View() tea.View {
 	}
 
 	sort.Strings(itemIDs)
-
 	for _, itemID := range itemIDs {
 		name := game.GetItemNameFromRegistry(itemID)
 		amount := client.Inventory[itemID]
-		inventory.WriteString(
-			fmt.Sprintf("%s | %d\n", name, amount),
-		)
+		fmt.Fprintf(&inventory, "%s | %d\n", name, amount)
 	}
 
 	worldContent := worldStyle.Render(world.String())
