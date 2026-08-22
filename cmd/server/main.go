@@ -28,7 +28,7 @@ func main() {
 
 	log.Println("Npc Registry: %v", npcRegistry)
 
-	gServer := server.NewGServer(time.Millisecond*200, 1000, 1000)
+	gServer := server.NewGServer(time.Millisecond*200, 4000, 4000)
 	http.HandleFunc("/ws", gServer.HandleClientConnection)
 	http.HandleFunc("/ws/ro", gServer.HandleClientConnectionReadOnly) // Read only websocket
 	go gServer.GameLoop()

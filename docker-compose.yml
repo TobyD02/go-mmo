@@ -12,8 +12,14 @@ services:
     build: .
     image: mmo:latest
     entrypoint: ["server"]
+    environment:
+      INTERACTABLES_CONFIG: "/data/interactables.json"
+      ITEMS_CONFIG: "/data/items.json"
+      NPCS_CONFIG: "/data/npcs.json"
     ports:
       - "8080:8080"
+    volumes:
+      - ./data:/data
 
   client1:
     <<: *headless-client

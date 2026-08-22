@@ -54,7 +54,10 @@ func (wc *GWorldController) SetupWorld(
 		log.Fatalf("failed to get npc registry")
 	}
 
+	log.Println("Starting world generation")
+
 	for y, row := range wc.GameWorld.Map {
+		log.Printf("Generating Row %d", y)
 		for x := range row {
 			if (x == 0 || x == wc.GameWorld.Width-1) || (y == 0 || y == wc.GameWorld.Height-1) {
 				if edgeWalls {
@@ -141,7 +144,7 @@ func (wc *GWorldController) BuildWorldDiff() game.GameWorldDiff {
 }
 
 func (wc *GWorldController) AddInteractableInstance(interactableInstance *game.GInteractableInstance) {
-	if wc.GameWorld.QueryInteractableInstanceAtPosition(interactableInstance.Pos.X, interactableInstance.Pos.Y) != nil {
+	if len(wc.interactableSpatialIndex.QueryPos(interactableInstance.Pos.X, interactableInstance.Pos.Y)) != 0 {
 		return // Only a single interactableInstance in a tile
 	}
 	if wc.GameWorld.QueryMap(interactableInstance.Pos.X, interactableInstance.Pos.Y) != game.TileWalkable {
@@ -228,7 +231,7 @@ func (wc *GWorldController) MovePlayer(client *GServerClient, dx, dy int) {
 		return // Cannot move to unwalkable tile
 	}
 
-	if wc.GameWorld.QueryInteractableInstanceAtPosition(newX, newY) != nil {
+	if len(wc.interactableSpatialIndex.QueryPos(newX, newY)) > 0 {
 		return // Cannot move over interactables?
 	}
 
@@ -263,7 +266,7 @@ func (wc *GWorldController) MoveNpc(npcInstanceID string, dx, dy int) {
 		return // Cannot move to unwalkable tile
 	}
 
-	if wc.GameWorld.QueryInteractableInstanceAtPosition(newX, newY) != nil {
+	if len(wc.interactableSpatialIndex.QueryPos(newX, newY)) > 0 {
 		return // Cannot move over interactables?
 	}
 
@@ -445,7 +448,7 @@ func (wc *GWorldController) DoNpcs(npcInstanceIDs map[string]struct{}) {
 		newX := npcInstance.Pos.X + delta.X
 		newY := npcInstance.Pos.Y + delta.Y
 
-		if free := wc.GameWorld.QueryInteractableInstanceAtPosition(newX, newY); free != nil {
+		if len(wc.interactableSpatialIndex.QueryPos(newX, newY)) > 0 {
 			continue
 		}
 

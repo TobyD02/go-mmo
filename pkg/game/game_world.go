@@ -89,34 +89,3 @@ func (g *GameWorld) QueryMap(x, y int) GameWorldTile {
 
 	return g.Map[y][x]
 }
-
-func (g *GameWorld) QueryPlayersAtPosition(x, y int) map[string]*GPlayer {
-	players := make(map[string]*GPlayer, 0)
-	for playerID, e := range g.Players {
-		if e.Pos.X == x && e.Pos.Y == y {
-			players[playerID] = e
-		}
-	}
-
-	return players
-}
-
-func (g *GameWorld) QueryInteractableInstanceAtPosition(x, y int) *GInteractableInstance { // singular since there can only be one
-	for _, i := range g.Interactables {
-		if i.Pos.X == x && i.Pos.Y == y {
-			return i
-		}
-	}
-
-	return nil
-}
-
-func (g *GameWorld) QueryNpcInstanceAtPosition(x, y int) *GNpcInstance { // singular since there can only be one
-	for _, i := range g.Npcs {
-		if i.Pos.X == x && i.Pos.Y == y {
-			return i
-		}
-	}
-
-	return nil
-}
