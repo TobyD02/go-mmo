@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand/v2"
 
+	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/game"
 	"github.com/tobyd02/go-mmo/pkg/util"
 )
@@ -21,6 +22,7 @@ type GWorldController struct {
 
 	npcSpatialIndex          util.GSpatialIndex
 	interactableSpatialIndex util.GSpatialIndex
+	playerSpatialIndex       util.GSpatialIndex
 	// @todo - at the moment interactables cannot move, however if they ever do then the spatial index will need updating
 }
 
@@ -37,6 +39,7 @@ func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getM
 
 		npcSpatialIndex:          make(util.GSpatialIndex),
 		interactableSpatialIndex: make(util.GSpatialIndex),
+		playerSpatialIndex:       make(util.GSpatialIndex),
 	}
 }
 
@@ -190,6 +193,7 @@ func (wc *GWorldController) AddPlayer(playerID string, x, y int) error {
 
 	wc.addPlayer(game.NewGPlayer(playerID, x, y))
 
+	wc.playerSpatialIndex.Add(playerID, util.Vec2{X: x, Y: y})
 	wc.changedPlayers[playerID] = struct{}{}
 
 	return nil
@@ -235,13 +239,36 @@ func (wc *GWorldController) MovePlayer(client *GServerClient, dx, dy int) {
 		return // Cannot move over interactables?
 	}
 
+	playerOldPos := player.Pos
+
 	player.Pos.X += dx
 	player.Pos.Y += dy
 
 	wc.changedPlayers[client.ID] = struct{}{}
+	wc.playerSpatialIndex.Update(client.ID, playerOldPos, player.Pos)
+
+	wc.SetTile(playerOldPos, game.TileWall)
 
 	// wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("moved from %d to %d", player.Pos.X, player.Pos.Y))
 	// log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
+}
+
+func (wc *GWorldController) SetTile(pos util.Vec2, tile game.GameWorldTile) {
+	if len(wc.playerSpatialIndex.QueryPos(pos.X, pos.Y)) > 0 {
+		return
+	}
+
+	if len(wc.npcSpatialIndex.QueryPos(pos.X, pos.Y)) > 0 {
+		return
+	}
+
+	// If within spawn radius of spawn point then dont allow
+	if wc.GameWorld.SpawnPoint.DistanceSquared(pos) <= config.SpawnProtectionRadiusSquared {
+		return
+	}
+
+	wc.GameWorld.Map[pos.Y][pos.X] = tile
+	wc.changedTiles[pos] = struct{}{}
 }
 
 func (wc *GWorldController) MoveNpc(npcInstanceID string, dx, dy int) {
@@ -299,6 +326,16 @@ func (wc *GWorldController) QuickInteractableInstancesQueryAtPos(x, y int) *game
 	}
 
 	return nil
+}
+
+func (wc *GWorldController) QuickPlayersQueryAtPos(x, y int) map[string]*game.GPlayer {
+	ids := wc.playerSpatialIndex[util.Vec2{X: x, Y: y}]
+	instances := make(map[string]*game.GPlayer)
+	for instanceID := range ids {
+		instances[instanceID] = wc.GameWorld.Players[instanceID]
+	}
+
+	return instances
 }
 
 func (wc *GWorldController) InteractWith(client *GServerClient, interactableInstanceID string) {

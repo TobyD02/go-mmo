@@ -21,3 +21,7 @@ const ServerTickSpeed time.Duration = time.Millisecond * 200
 // Terminal layout.
 const ClientRows = 40
 const ClientColumns = ClientViewportTilesX + 2
+
+// Spawn Protection
+const SpawnProtectionRadius = 10
+const SpawnProtectionRadiusSquared = SpawnProtectionRadius * SpawnProtectionRadius

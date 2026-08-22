@@ -198,6 +198,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m GameModel) View() tea.View {
+	start := time.Now()
 	var world strings.Builder
 	var log strings.Builder
 	var inventory strings.Builder
@@ -272,6 +273,8 @@ func (m GameModel) View() tea.View {
 
 	// Draw pos at top of inventory
 	fmt.Fprintf(&inventory, "(%d, %d)\n", centerX, centerY)
+
+	fmt.Fprintf(&inventory, "frametime: %-12s\n", time.Since(start))
 
 	itemIDs := make([]string, 0, len(clientPlayer.Inventory))
 
