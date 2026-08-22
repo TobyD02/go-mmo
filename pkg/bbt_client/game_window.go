@@ -16,8 +16,8 @@ import (
 )
 
 type GameModel struct {
-	gameWorld *game.GameWorld
-	client    *client.GClient
+	clientWorld *client.GClientWorld
+	client      *client.GClient
 
 	moveInputDir     [4]int // up, down, left, right
 	interactInputDir [4]int // up, down, left, right
@@ -36,7 +36,7 @@ type GameTickMsg struct{}
 
 func InitialModel(
 	gameWorld *game.GameWorld,
-	client *client.GClient,
+	gClient *client.GClient,
 ) GameModel {
 
 	chatInput := textinput.New()
@@ -45,8 +45,8 @@ func InitialModel(
 	chatInput.CharLimit = 200
 
 	return GameModel{
-		gameWorld: gameWorld,
-		client:    client,
+		clientWorld: client.NewGClientWorld(gameWorld),
+		client:      gClient,
 
 		chatInput:  chatInput,
 		chatOutput: "",
@@ -67,21 +67,21 @@ func (m GameModel) Init() tea.Cmd {
 }
 
 func (m GameModel) interactDirection(dx, dy int) {
-	self := m.gameWorld.Players[m.client.ClientID]
+	self := m.clientWorld.QueryPlayer(m.client.ClientID)
 
 	newX := self.Pos.X + dx
 	newY := self.Pos.Y + dy
 
-	npcInstance := m.gameWorld.QueryNpcInstanceAtPosition(newX, newY)
-	interactableInstance := m.gameWorld.QueryInteractableInstanceAtPosition(newX, newY)
+	npcInstances := m.clientWorld.QueryNpcInstancesAtPosition(newX, newY)
+	interactableInstance := m.clientWorld.QueryInteractableInstanceAtPosition(newX, newY)
 
-	if npcInstance != nil {
-		m.client.SendAttackNpcMessage(npcInstance.ID)
+	for _, npcInstance := range npcInstances {
+		_ = m.client.SendAttackNpcMessage(npcInstance.ID) // attack the first found and then return
 		return
 	}
 
 	if interactableInstance != nil {
-		m.client.SendInteractMessage(interactableInstance.ID)
+		_ = m.client.SendInteractMessage(interactableInstance.ID)
 		return
 	}
 
@@ -102,14 +102,14 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if diff != nil {
-			updateWorld(m.gameWorld, diff)
+			m.clientWorld.ApplyWorldDiff(diff)
 		}
 
 		moveX := m.moveInputDir[3] - m.moveInputDir[2]
 		moveY := m.moveInputDir[1] - m.moveInputDir[0]
 
 		if moveX != 0 || moveY != 0 {
-			m.client.SendMoveMessage(moveX, moveY)
+			_ = m.client.SendMoveMessage(moveX, moveY)
 		}
 
 		m.moveInputDir = [4]int{}
@@ -196,13 +196,6 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func updateWorld(
-	world *game.GameWorld,
-	diff *game.GameWorldDiff,
-) {
-	world.ApplyDiff(diff)
-}
-
 func (m GameModel) View() tea.View {
 	var world strings.Builder
 	var log strings.Builder
@@ -211,13 +204,13 @@ func (m GameModel) View() tea.View {
 	viewportWidth := 64
 	viewportHeight := 31
 
-	client := m.gameWorld.Players[m.client.ClientID]
-	if client == nil {
+	clientPlayer := m.clientWorld.QueryPlayer(m.client.ClientID)
+	if clientPlayer == nil {
 		return tea.NewView("Loading...")
 	}
 
-	centerX := client.Pos.X
-	centerY := client.Pos.Y
+	centerX := clientPlayer.Pos.X
+	centerY := clientPlayer.Pos.Y
 
 	startX := centerX - viewportWidth/2
 	startY := centerY - viewportHeight/2
@@ -228,16 +221,14 @@ func (m GameModel) View() tea.View {
 	for y := startY; y < endY; y++ {
 		for x := startX; x < endX; x++ {
 
-			// Outside the world
-			if y < 0 || y >= m.gameWorld.Height ||
-				x < 0 || x >= m.gameWorld.Width {
-				world.WriteString("  ")
+			if !m.clientWorld.IsInBounds(x, y) {
+				world.WriteString(" ")
 				continue
 			}
 
-			players := m.gameWorld.QueryPlayersAtPosition(x, y)
-			interactable := m.gameWorld.QueryInteractableInstanceAtPosition(x, y)
-			npc := m.gameWorld.QueryNpcInstanceAtPosition(x, y)
+			players := m.clientWorld.QueryPlayersAtPosition(x, y)
+			interactableInstance := m.clientWorld.QueryInteractableInstanceAtPosition(x, y)
+			npcInstances := m.clientWorld.QueryNpcInstancesAtPosition(x, y)
 
 			if len(players) > 0 {
 				if players[m.client.ClientID] != nil {
@@ -249,17 +240,20 @@ func (m GameModel) View() tea.View {
 				continue
 			}
 
-			if interactable != nil {
-				drawInteractable(&world, interactable, client.ID)
+			if interactableInstance != nil {
+				drawInteractable(&world, interactableInstance, clientPlayer.ID)
 				continue
 			}
 
-			if npc != nil {
-				drawNpc(&world, npc, client.ID)
+			if len(npcInstances) > 0 {
+				for _, npcInstance := range npcInstances {
+					drawNpc(&world, npcInstance, clientPlayer.ID)
+					break
+				}
 				continue
 			}
 
-			drawTile(&world, m.gameWorld.Map[y][x])
+			drawTile(&world, m.clientWorld.QueryMap(x, y))
 		}
 
 		world.WriteString("\n")
@@ -278,16 +272,16 @@ func (m GameModel) View() tea.View {
 	// Draw pos at top of inventory
 	fmt.Fprintf(&inventory, "x: %d | y : %d\n", centerX, centerY)
 
-	itemIDs := make([]string, 0, len(client.Inventory))
+	itemIDs := make([]string, 0, len(clientPlayer.Inventory))
 
-	for itemID := range client.Inventory {
+	for itemID := range clientPlayer.Inventory {
 		itemIDs = append(itemIDs, itemID)
 	}
 
 	sort.Strings(itemIDs)
 	for _, itemID := range itemIDs {
 		name := game.GetItemNameFromRegistry(itemID)
-		amount := client.Inventory[itemID]
+		amount := clientPlayer.Inventory[itemID]
 		fmt.Fprintf(&inventory, "%s | %d\n", name, amount)
 	}
 

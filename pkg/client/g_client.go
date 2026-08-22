@@ -80,7 +80,7 @@ func (c *GClient) Start(serverURI string, clientID string) (*game.GameWorld, err
 	}
 
 	if msg.Type != messages.TServerInitialWorldStateMessage {
-		return nil, fmt.Errorf("message received wasn't initial world state")
+		return nil, fmt.Errorf("message received wasn't initial world state %s", msg.Type)
 	}
 
 	parsedData, err := messages.ParseGServerInitialWorldStateData(msg.Data)

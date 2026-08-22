@@ -1,14 +1,17 @@
 // Package game - game logic shared between server and client
 package game
 
+import "github.com/tobyd02/go-mmo/pkg/util"
+
 type GameWorld struct {
 	Map           [][]GameWorldTile
 	Players       map[string]*GPlayer
 	Npcs          map[string]*GNpcInstance
 	Interactables map[string]*GInteractableInstance
-	Width         int
-	Height        int
-	SpawnPoint    Vec2
+
+	Width      int
+	Height     int
+	SpawnPoint util.Vec2
 }
 
 func NewGameWorld(width, height int) *GameWorld {
@@ -27,7 +30,7 @@ func NewGameWorld(width, height int) *GameWorld {
 		Npcs:          gameNpcs,
 		Interactables: gameInteractables,
 		Width:         width, Height: height,
-		SpawnPoint: Vec2{int(width / 2), int(height / 2)},
+		SpawnPoint: util.Vec2{int(width / 2), int(height / 2)},
 	}
 }
 

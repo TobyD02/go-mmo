@@ -28,10 +28,10 @@ func main() {
 
 	log.Println("Npc Registry: %v", npcRegistry)
 
-	server := server.NewGServer(time.Millisecond*200, 20, 20)
-	http.HandleFunc("/ws", server.HandleClientConnection)
-	http.HandleFunc("/ws/ro", server.HandleClientConnectionReadOnly) // Read only websocket
-	go server.GameLoop()
+	gServer := server.NewGServer(time.Millisecond*200, 1000, 1000)
+	http.HandleFunc("/ws", gServer.HandleClientConnection)
+	http.HandleFunc("/ws/ro", gServer.HandleClientConnectionReadOnly) // Read only websocket
+	go gServer.GameLoop()
 
 	log.Println("server listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

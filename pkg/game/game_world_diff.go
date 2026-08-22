@@ -1,5 +1,7 @@
 package game
 
+import "github.com/tobyd02/go-mmo/pkg/util"
+
 type GameWorldDiff struct {
 	MapDiff           []GameWorldMapDiff                `json:"map_diff"`
 	PlayersDiff       map[string]*GPlayer               `json:"players_diff"`
@@ -8,7 +10,7 @@ type GameWorldDiff struct {
 }
 
 type GameWorldMapDiff struct {
-	Pos  Vec2          `json:"position"`
+	Pos  util.Vec2     `json:"position"`
 	Tile GameWorldTile `json:"tile"`
 }
 

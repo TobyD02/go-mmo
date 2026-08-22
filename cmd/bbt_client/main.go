@@ -17,16 +17,16 @@ func main() {
 	}
 
 	clientID := uuid.NewString()
-	client := client.NewGClient(false)
-	worldState, err := client.Start(serverURI, clientID)
+	gClient := client.NewGClient(false)
+	worldState, err := gClient.Start(serverURI, clientID)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	defer client.StopAndCloseConnection()
+	defer gClient.StopAndCloseConnection()
 
-	model := bbt_client.InitialModel(worldState, client)
+	model := bbt_client.InitialModel(worldState, gClient)
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		log.Fatal(err)
 	}

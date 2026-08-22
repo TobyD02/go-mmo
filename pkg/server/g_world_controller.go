@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 
 	"github.com/tobyd02/go-mmo/pkg/game"
+	"github.com/tobyd02/go-mmo/pkg/util"
 )
 
 type GWorldController struct {
@@ -16,7 +17,11 @@ type GWorldController struct {
 	changedPlayers       map[string]struct{}
 	changedNpcs          map[string]struct{}
 	changedInteractables map[string]struct{}
-	changedTiles         map[game.Vec2]struct{}
+	changedTiles         map[util.Vec2]struct{}
+
+	npcSpatialIndex          util.GSpatialIndex
+	interactableSpatialIndex util.GSpatialIndex
+	// @todo - at the moment interactables cannot move, however if they ever do then the spatial index will need updating
 }
 
 func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getMessageRouter func() *GMessageRouter) *GWorldController {
@@ -25,11 +30,13 @@ func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getM
 		getServerTick:    getTicker,
 		getMessageRouter: getMessageRouter,
 
-		changedPlayers: make(map[string]struct{}),
-		changedNpcs:    make(map[string]struct{}),
-
+		changedPlayers:       make(map[string]struct{}),
+		changedNpcs:          make(map[string]struct{}),
 		changedInteractables: make(map[string]struct{}),
-		changedTiles:         make(map[game.Vec2]struct{}),
+		changedTiles:         make(map[util.Vec2]struct{}),
+
+		npcSpatialIndex:          make(util.GSpatialIndex),
+		interactableSpatialIndex: make(util.GSpatialIndex),
 	}
 }
 
@@ -59,17 +66,17 @@ func (wc *GWorldController) SetupWorld(
 				if x != wc.GameWorld.SpawnPoint.X && y != wc.GameWorld.SpawnPoint.Y {
 					randInt := rand.IntN(100)
 					if randInt == 1 {
-						interactableID, err := game.GetRandomIDFromRegistry(interactableRegistry)
+						interactableID, err := util.GetRandomIDFromRegistry(interactableRegistry)
 						if err != nil {
 							continue
 						}
-						wc.AddInteractable(game.NewGInteractableInstance(interactableID, x, y))
+						wc.AddInteractableInstance(game.NewGInteractableInstance(interactableID, x, y))
 					} else if randInt == 2 {
-						npcID, err := game.GetRandomIDFromRegistry(npcRegistry)
+						npcID, err := util.GetRandomIDFromRegistry(npcRegistry)
 						if err != nil {
 							continue
 						}
-						wc.AddNpc(game.NewGNpcInstance(npcID, x, y))
+						wc.AddNpcInstance(game.NewGNpcInstance(npcID, x, y))
 					}
 				}
 			}
@@ -126,41 +133,47 @@ func (wc *GWorldController) BuildWorldDiff() game.GameWorldDiff {
 	}
 
 	clear(wc.changedPlayers)
+	clear(wc.changedNpcs)
 	clear(wc.changedInteractables)
 	clear(wc.changedTiles)
 
 	return diff
 }
 
-func (wc *GWorldController) AddInteractable(interactable *game.GInteractableInstance) {
-	if wc.GameWorld.QueryInteractableInstanceAtPosition(interactable.Pos.X, interactable.Pos.Y) != nil {
-		return // Only a single interactable in a tile
+func (wc *GWorldController) AddInteractableInstance(interactableInstance *game.GInteractableInstance) {
+	if wc.GameWorld.QueryInteractableInstanceAtPosition(interactableInstance.Pos.X, interactableInstance.Pos.Y) != nil {
+		return // Only a single interactableInstance in a tile
 	}
-	if wc.GameWorld.QueryMap(interactable.Pos.X, interactable.Pos.Y) != game.TileWalkable {
+	if wc.GameWorld.QueryMap(interactableInstance.Pos.X, interactableInstance.Pos.Y) != game.TileWalkable {
 		return // Only on walkable tiles, not inside a wall
 	}
 
-	wc.GameWorld.Interactables[interactable.ID] = interactable
-	wc.changedInteractables[interactable.ID] = struct{}{}
+	wc.GameWorld.Interactables[interactableInstance.ID] = interactableInstance
+	wc.interactableSpatialIndex.Add(interactableInstance.ID, interactableInstance.Pos)
+	wc.changedInteractables[interactableInstance.ID] = struct{}{}
 }
 
-func (wc *GWorldController) AddNpc(npc *game.GNpcInstance) {
-	if wc.GameWorld.QueryMap(npc.Pos.X, npc.Pos.Y) != game.TileWalkable {
+func (wc *GWorldController) AddNpcInstance(npcInstance *game.GNpcInstance) {
+	if wc.GameWorld.QueryMap(npcInstance.Pos.X, npcInstance.Pos.Y) != game.TileWalkable {
 		return // Only on walkable tiles, not inside a wall
 	}
 
-	wc.GameWorld.Npcs[npc.ID] = npc
-	wc.changedNpcs[npc.ID] = struct{}{}
+	wc.GameWorld.Npcs[npcInstance.ID] = npcInstance
+	wc.npcSpatialIndex.Add(npcInstance.ID, npcInstance.Pos)
+	wc.changedNpcs[npcInstance.ID] = struct{}{}
 }
 
-func (wc *GWorldController) DeleteNpc(npcID string) {
-	if _, exists := wc.GameWorld.Npcs[npcID]; !exists {
+func (wc *GWorldController) DeleteNpc(npcInstanceID string) {
+	npcInstance, exists := wc.GameWorld.Npcs[npcInstanceID]
+
+	if !exists {
 		return
 	}
 
-	delete(wc.GameWorld.Npcs, npcID)
+	delete(wc.GameWorld.Npcs, npcInstance.ID)
+	wc.npcSpatialIndex.Remove(npcInstance.ID, npcInstance.Pos)
 
-	wc.changedNpcs[npcID] = struct{}{}
+	wc.changedNpcs[npcInstance.ID] = struct{}{}
 }
 
 func (wc *GWorldController) SpawnNewPlayer(playerID string) error {
@@ -233,16 +246,16 @@ func (wc *GWorldController) MoveNpc(npcInstanceID string, dx, dy int) {
 		return
 	}
 
-	npc, exists := wc.GameWorld.Npcs[npcInstanceID]
+	npcInstance, exists := wc.GameWorld.Npcs[npcInstanceID]
 	if !exists { // Safe guard
 		return
 	}
 
-	newX := npc.Pos.X + dx
-	newY := npc.Pos.Y + dy
+	newX := npcInstance.Pos.X + dx
+	newY := npcInstance.Pos.Y + dy
 
-	if (npc.Pos.Y+dy < 0 || npc.Pos.Y+dy >= len(wc.GameWorld.Map)) ||
-		(npc.Pos.X+dx < 0 || npc.Pos.X+dx >= len(wc.GameWorld.Map[npc.Pos.Y+dy])) {
+	if (npcInstance.Pos.Y+dy < 0 || npcInstance.Pos.Y+dy >= len(wc.GameWorld.Map)) ||
+		(npcInstance.Pos.X+dx < 0 || npcInstance.Pos.X+dx >= len(wc.GameWorld.Map[npcInstance.Pos.Y+dy])) {
 		return
 	}
 
@@ -254,13 +267,35 @@ func (wc *GWorldController) MoveNpc(npcInstanceID string, dx, dy int) {
 		return // Cannot move over interactables?
 	}
 
-	npc.Pos.X += dx
-	npc.Pos.Y += dy
+	oldPos := npcInstance.Pos
+
+	npcInstance.Pos.X += dx
+	npcInstance.Pos.Y += dy
 
 	wc.changedNpcs[npcInstanceID] = struct{}{}
+	wc.npcSpatialIndex.Update(npcInstance.ID, oldPos, npcInstance.Pos)
 
 	// wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("moved from %d to %d", player.Pos.X, player.Pos.Y))
 	// log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
+}
+
+func (wc *GWorldController) QuickNpcInstancesQueryAtPos(x, y int) map[string]*game.GNpcInstance {
+	ids := wc.npcSpatialIndex[util.Vec2{X: x, Y: y}]
+	instances := make(map[string]*game.GNpcInstance)
+	for instanceID := range ids {
+		instances[instanceID] = wc.GameWorld.Npcs[instanceID]
+	}
+
+	return instances
+}
+
+func (wc *GWorldController) QuickInteractableInstancesQueryAtPos(x, y int) *game.GInteractableInstance {
+	ids := wc.interactableSpatialIndex[util.Vec2{X: x, Y: y}]
+	for instanceID := range ids {
+		return wc.GameWorld.Interactables[instanceID]
+	}
+
+	return nil
 }
 
 func (wc *GWorldController) InteractWith(client *GServerClient, interactableInstanceID string) {
@@ -303,11 +338,12 @@ func (wc *GWorldController) InteractWith(client *GServerClient, interactableInst
 	wc.changedInteractables[interactableInstanceID] = struct{}{}
 }
 
-func (wc *GWorldController) DoTickers() {
-	// @todo - need to tick occupancy as well.
-	// - if occupant hasn't worked this tick, it should be cleared
-
-	for _, interactable := range wc.GameWorld.Interactables {
+func (wc *GWorldController) DoInteractables(interactableInstanceIDs map[string]struct{}) {
+	for interactableInstanceID := range interactableInstanceIDs {
+		interactable := wc.GameWorld.Interactables[interactableInstanceID]
+		if interactable == nil {
+			continue
+		}
 
 		// If its occupied and hasn't been worked this tick
 		if interactable.IsOccupied() && !interactable.DidWorkThisTick(wc.getServerTick()) {
@@ -383,9 +419,14 @@ func (wc *GWorldController) AttackNpc(client *GServerClient, npcInstanceID strin
 
 }
 
-func (wc *GWorldController) DoNpcs() {
+func (wc *GWorldController) DoNpcs(npcInstanceIDs map[string]struct{}) {
 
-	for npcInstanceID, npcInstance := range wc.GameWorld.Npcs {
+	for npcInstanceID := range npcInstanceIDs {
+		npcInstance := wc.GameWorld.Npcs[npcInstanceID]
+		if npcInstance == nil {
+			continue
+		}
+
 		npc := game.GetNpcFromRegistry(npcInstance.NpcID)
 		if npc == nil {
 			continue
@@ -412,9 +453,7 @@ func (wc *GWorldController) DoNpcs() {
 			continue
 		}
 
-		if delta.X != 0 || delta.Y != 0 {
-			wc.MoveNpc(npcInstanceID, delta.X, delta.Y)
-			wc.changedNpcs[npcInstanceID] = struct{}{}
-		}
+		wc.MoveNpc(npcInstanceID, delta.X, delta.Y)
+		wc.changedNpcs[npcInstanceID] = struct{}{}
 	}
 }

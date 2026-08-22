@@ -2,6 +2,7 @@ package game
 
 import (
 	"github.com/google/uuid"
+	"github.com/tobyd02/go-mmo/pkg/util"
 )
 
 type GInteractable struct {
@@ -16,7 +17,7 @@ type GInteractable struct {
 type GInteractableInstance struct {
 	ID                  string
 	InteractableID      string
-	Pos                 Vec2
+	Pos                 util.Vec2
 	CurrentTickCooldown int
 	CurrentTicksWorked  int
 	OccupiedBy          string
@@ -28,7 +29,7 @@ func NewGInteractableInstance(interactableID string, x, y int) *GInteractableIns
 	return &GInteractableInstance{
 		ID:                  uuid.NewString(),
 		InteractableID:      interactableID,
-		Pos:                 Vec2{X: x, Y: y},
+		Pos:                 util.Vec2{X: x, Y: y},
 		CurrentTickCooldown: 0,
 		CurrentTicksWorked:  0,
 		OccupiedBy:          "",
@@ -36,6 +37,17 @@ func NewGInteractableInstance(interactableID string, x, y int) *GInteractableIns
 		OccupantCooldown:    0,
 	}
 }
+
+// Implement GEntity methods
+func (i *GInteractableInstance) GetID() string {
+	return i.ID
+}
+
+func (i *GInteractableInstance) GetPos() util.Vec2 {
+	return i.Pos
+}
+
+// -------------------------
 
 func (i *GInteractableInstance) DoWork(currentTick int) {
 	i.CurrentTicksWorked++

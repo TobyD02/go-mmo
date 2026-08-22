@@ -151,6 +151,15 @@ func (s *GServer) HandleClientConnectionReadOnly(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// send initial world state before registering read only client
+	initialWorldStateMessage, err := s.buildInitialWorldStateMessage()
+	if err != nil {
+		s.removeClientReadOnly(client)
+		return
+	}
+
+	s.sendInitialWorldState(client, initialWorldStateMessage)
+
 	s.clientsReadOnlyMutex.Lock()
 
 	if _, exists := s.ClientsReadOnly[client.ID]; exists {
@@ -164,14 +173,6 @@ func (s *GServer) HandleClientConnectionReadOnly(w http.ResponseWriter, r *http.
 	// Assign the client connection
 	s.ClientsReadOnly[client.ID] = client
 	s.clientsReadOnlyMutex.Unlock()
-
-	initialWorldStateMessage, err := s.buildInitialWorldStateMessage()
-	if err != nil {
-		s.removeClientReadOnly(client)
-		return
-	}
-
-	s.sendInitialWorldState(client, initialWorldStateMessage)
 
 	// Defer deletion on disconnect
 	defer s.removeClientReadOnly(client)
@@ -286,15 +287,53 @@ func (s *GServer) doTick() {
 }
 
 func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {
+	// @todo move to config/const
+	simulateRangeX := 20
+	simulateRangeY := 20
+
+	npcSet := make(map[string]struct{})
+	interactableSet := make(map[string]struct{})
+
 	// Do Client Actions
 	for _, client := range currentClients {
 		clientMessages := client.DrainMessages()
 		s.handleMessages(client, clientMessages) // Client actions affect new game world
+
+		// Get surrounding NPCS into the set
+		player := s.WorldController.GameWorld.Players[client.ID]
+		if player == nil {
+			continue
+		}
+
+		minX := player.Pos.X - simulateRangeX
+		maxX := player.Pos.Y - simulateRangeX
+		minY := player.Pos.X + simulateRangeY
+		maxY := player.Pos.Y + simulateRangeY
+
+		npcRangeSet := s.WorldController.npcSpatialIndex.QueryPosRange(minX, maxX, minY, maxY)
+		interactableRangeSet := s.WorldController.interactableSpatialIndex.QueryPosRange(minX, maxX, minY, maxY)
+
+		for npcID := range npcRangeSet {
+			npcSet[npcID] = struct{}{}
+		}
+
+		for interactableID := range interactableRangeSet {
+			interactableSet[interactableID] = struct{}{}
+		}
+
 	}
 
+	log.Printf(
+		"SIMUL | npcs: %d/%-12d | interactables: %d/%-12d\n",
+		len(npcSet),
+		len(s.WorldController.GameWorld.Npcs),
+		len(interactableSet),
+		len(s.WorldController.GameWorld.Interactables),
+	)
+
 	// Run tickers last
-	s.WorldController.DoTickers()
-	s.WorldController.DoNpcs()
+	s.WorldController.DoInteractables(interactableSet)
+	s.WorldController.DoNpcs(npcSet)
 }
 
 func (s *GServer) getClient(clientID string) *GServerClient {

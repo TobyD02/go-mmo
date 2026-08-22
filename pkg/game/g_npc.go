@@ -4,6 +4,7 @@ import (
 	"math/rand/v2"
 
 	"github.com/google/uuid"
+	"github.com/tobyd02/go-mmo/pkg/util"
 )
 
 type GNpc struct {
@@ -18,12 +19,12 @@ type GNpc struct {
 }
 
 type GNpcInstance struct {
-	ID              string `json:"id"`
-	NpcID           string `json:"npc_id"`
-	Pos             Vec2   `json:"pos"`
-	LastPos         Vec2   `json:"last_pos"`
-	LastTickUpdated int    `json:"last_tick_updated"`
-	Health          int    `json:"health"`
+	ID              string    `json:"id"`
+	NpcID           string    `json:"npc_id"`
+	Pos             util.Vec2 `json:"pos"`
+	LastPos         util.Vec2 `json:"last_pos"`
+	LastTickUpdated int       `json:"last_tick_updated"`
+	Health          int       `json:"health"`
 
 	healthHasSet bool
 
@@ -35,8 +36,8 @@ func NewGNpcInstance(npcID string, x, y int) *GNpcInstance {
 	return &GNpcInstance{
 		ID:      uuid.NewString(),
 		NpcID:   npcID,
-		Pos:     Vec2{X: x, Y: y},
-		LastPos: Vec2{X: x, Y: y},
+		Pos:     util.Vec2{X: x, Y: y},
+		LastPos: util.Vec2{X: x, Y: y},
 
 		PlayerTargetID: "",
 		NpcTargetID:    "",
@@ -44,6 +45,18 @@ func NewGNpcInstance(npcID string, x, y int) *GNpcInstance {
 		Health:         0,
 	}
 }
+
+// Implement GEntity methods
+
+func (n *GNpcInstance) GetID() string {
+	return n.ID
+}
+
+func (n *GNpcInstance) GetPos() util.Vec2 {
+	return n.Pos
+}
+
+// -------------------------
 
 func (n *GNpcInstance) GetLoot() map[string]int {
 	npc := GetNpcFromRegistry(n.NpcID)
@@ -65,7 +78,7 @@ func (n *GNpcInstance) checkInit() {
 }
 
 // Think - returns a move delta
-func (n *GNpcInstance) Think(currentTick int, playerTarget *GPlayer, npcTarget *GNpcInstance) Vec2 {
+func (n *GNpcInstance) Think(currentTick int, playerTarget *GPlayer, npcTarget *GNpcInstance) util.Vec2 {
 	n.checkInit()
 
 	// so - if no target, it should patrol
@@ -79,7 +92,7 @@ func (n *GNpcInstance) Think(currentTick int, playerTarget *GPlayer, npcTarget *
 		n.NpcTargetID = ""
 	}
 
-	var moveDecision Vec2
+	var moveDecision util.Vec2
 	if playerTarget != nil {
 		moveDecision = n.handlePlayerTarget(playerTarget)
 	} else if npcTarget != nil {
@@ -103,15 +116,15 @@ func (n *GNpcInstance) Think(currentTick int, playerTarget *GPlayer, npcTarget *
 	return moveDecision
 }
 
-func (n *GNpcInstance) handlePlayerTarget(playerTarget *GPlayer) Vec2 {
+func (n *GNpcInstance) handlePlayerTarget(playerTarget *GPlayer) util.Vec2 {
 	return n.fleeDecision(playerTarget.Pos)
 }
 
-func (n *GNpcInstance) handleNpcTarget(npcTarget *GNpcInstance) Vec2 {
+func (n *GNpcInstance) handleNpcTarget(npcTarget *GNpcInstance) util.Vec2 {
 	return n.fleeDecision(npcTarget.Pos)
 }
 
-func (n *GNpcInstance) fleeDecision(targetPos Vec2) Vec2 {
+func (n *GNpcInstance) fleeDecision(targetPos util.Vec2) util.Vec2 {
 
 	if n.Pos.Distance(targetPos) == 0 || n.Pos.Equal(n.LastPos) {
 		return n.patrolDecision()
@@ -119,15 +132,15 @@ func (n *GNpcInstance) fleeDecision(targetPos Vec2) Vec2 {
 	return n.Pos.Direction(targetPos).Reverse().Normalize()
 }
 
-func (n *GNpcInstance) patrolDecision() Vec2 {
+func (n *GNpcInstance) patrolDecision() util.Vec2 {
 	// just pick a random direction for now. keep it limited to 1 of either axis
 	moveX := rand.Float32() > 0.5
 	direction := rand.IntN(2)*2 - 1
 
 	if moveX {
-		return Vec2{X: direction, Y: 0}
+		return util.Vec2{X: direction, Y: 0}
 	} else {
-		return Vec2{X: 0, Y: direction}
+		return util.Vec2{X: 0, Y: direction}
 	}
 }
 
@@ -137,7 +150,7 @@ func (n *GNpcInstance) PlayerCanAttack(player *GPlayer) bool {
 	return n.canAttack(player.Pos)
 }
 
-func (n *GNpcInstance) canAttack(pos Vec2) bool {
+func (n *GNpcInstance) canAttack(pos util.Vec2) bool {
 	npc := GetNpcFromRegistry(n.NpcID)
 	if npc == nil {
 		return false
