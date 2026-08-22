@@ -37,7 +37,7 @@ func (s GSpatialIndex) QueryPos(x, y int) map[string]struct{} {
 	return s[Vec2{X: x, Y: y}]
 }
 
-func (s GSpatialIndex) QueryPosRange(minX, minY, maxX, maxY int) map[string]struct{} {
+func (s GSpatialIndex) QueryPosRange(minX, maxX, minY, maxY int) map[string]struct{} {
 	ids := make(map[string]struct{})
 	for x := minX; x <= maxX; x++ {
 		for y := minY; y <= maxY; y++ {

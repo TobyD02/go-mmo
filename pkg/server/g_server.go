@@ -11,8 +11,14 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/tobyd02/go-mmo/pkg/config"
+	"github.com/tobyd02/go-mmo/pkg/game"
 	"github.com/tobyd02/go-mmo/pkg/messages"
 )
+
+type InitialWorldStateResult struct {
+	Payload []byte
+	Err     error
+}
 
 type GServer struct {
 	Clients      map[string]*GServerClient
@@ -21,10 +27,24 @@ type GServer struct {
 	ClientsReadOnly      map[string]*GServerClient
 	clientsReadOnlyMutex sync.RWMutex
 
+	// owned by game loop. queued connections are read into these maps until they are ready to receive world updates
+	pendingClients         map[string]*GServerClient
+	pendingClientsReadOnly map[string]*GServerClient
+
 	WorldController *GWorldController
 
-	queuedConnections    []string
+	queuedConnections      []*GServerClient
+	queuedConnectionsMutex sync.RWMutex
+
+	queuedConnectionsReadOnly      []*GServerClient
+	queuedConnectionsReadOnlyMutex sync.RWMutex
+
 	queuedDisconnections []string
+
+	initialWorldStateBuilding bool                         // is there currently a builder goroutine for the world state
+	initialWorldStateResult   chan InitialWorldStateResult // channel for the builder goroutine to write to
+
+	diffsSinceInitialWorldStateBuilding [][]byte
 
 	upgrader websocket.Upgrader
 
@@ -39,8 +59,16 @@ func NewGServer(tickSpeed time.Duration, worldWidth int, worldHeight int) *GServ
 		Clients:         make(map[string]*GServerClient),
 		ClientsReadOnly: make(map[string]*GServerClient),
 
-		queuedConnections:    make([]string, 0),
+		pendingClients:         make(map[string]*GServerClient),
+		pendingClientsReadOnly: make(map[string]*GServerClient),
+
+		queuedConnections:         make([]*GServerClient, 0),
+		queuedConnectionsReadOnly: make([]*GServerClient, 0),
+
 		queuedDisconnections: make([]string, 0),
+
+		initialWorldStateResult: make(chan InitialWorldStateResult, 1),
+
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -85,10 +113,10 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s.clientsMutex.Lock()
+	s.clientsMutex.RLock()
 
 	if client.ID == "" {
-		s.clientsMutex.Unlock()
+		s.clientsMutex.RUnlock()
 
 		log.Printf("client attempted to connect with empty ID")
 		client.Close()
@@ -96,19 +124,20 @@ func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request)
 	}
 
 	if _, exists := s.Clients[client.ID]; exists {
-		s.clientsMutex.Unlock()
+		s.clientsMutex.RUnlock()
 
 		log.Printf("client already connected: %s", client.ID)
 		client.Close()
 		return
 	}
+	s.clientsMutex.RUnlock()
 
-	// Assign the client connection
+	s.queuedConnectionsMutex.Lock()
 
-	s.Clients[client.ID] = client
-	s.queuedConnections = append(s.queuedConnections, client.ID)
+	// Queue the connection
 
-	s.clientsMutex.Unlock()
+	s.queuedConnections = append(s.queuedConnections, client)
+	s.queuedConnectionsMutex.Unlock()
 
 	// Defer deletion on disconnect
 	defer s.removeClient(client)
@@ -152,28 +181,21 @@ func (s *GServer) HandleClientConnectionReadOnly(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// send initial world state before registering read only client
-	initialWorldStateMessage, err := s.buildInitialWorldStateMessage()
-	if err != nil {
-		s.removeClientReadOnly(client)
-		return
-	}
-
-	s.sendInitialWorldState(client, initialWorldStateMessage)
-
-	s.clientsReadOnlyMutex.Lock()
+	s.clientsReadOnlyMutex.RLock()
 
 	if _, exists := s.ClientsReadOnly[client.ID]; exists {
-		s.clientsReadOnlyMutex.Unlock()
+		s.clientsReadOnlyMutex.RUnlock()
 
 		log.Printf("(read only) client already connected: %s", client.ID)
-
+		client.Close()
 		return
 	}
 
-	// Assign the client connection
-	s.ClientsReadOnly[client.ID] = client
-	s.clientsReadOnlyMutex.Unlock()
+	s.clientsReadOnlyMutex.RUnlock()
+
+	s.queuedConnectionsReadOnlyMutex.Lock()
+	s.queuedConnectionsReadOnly = append(s.queuedConnectionsReadOnly, client)
+	s.queuedConnectionsReadOnlyMutex.Unlock()
 
 	// Defer deletion on disconnect
 	defer s.removeClientReadOnly(client)
@@ -191,17 +213,6 @@ func (s *GServer) removeClientReadOnly(client *GServerClient) {
 	s.clientsReadOnlyMutex.Unlock()
 
 	client.Close()
-}
-
-func (s *GServer) buildInitialWorldStateMessage() ([]byte, error) {
-	// First message is world state
-	serverInitialWorldStateMessage, err := messages.NewGServerInitialWorldStateMessage(s.WorldController.GameWorld)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get initial world state")
-	}
-
-	// Marshal the message
-	return json.Marshal(serverInitialWorldStateMessage)
 }
 
 func (s *GServer) sendInitialWorldState(client *GServerClient, initialWorldStateMessage []byte) {
@@ -267,6 +278,66 @@ func (s *GServer) snapshotClientsReadOnly() map[string]*GServerClient {
 func (s *GServer) doTick() {
 	s.tick++
 
+	select {
+	case initialState := <-s.initialWorldStateResult:
+		s.initialWorldStateBuilding = false
+
+		if initialState.Err != nil {
+			log.Printf("intial world state errored %s\n", initialState.Err)
+			for _, client := range s.pendingClients {
+				client.Close()
+			}
+
+			for _, client := range s.pendingClientsReadOnly {
+				client.Close()
+			}
+
+			clear(s.pendingClients)
+			clear(s.pendingClientsReadOnly)
+			s.diffsSinceInitialWorldStateBuilding = nil
+
+			break
+		}
+
+		// send messages to clients
+		for _, client := range s.pendingClients {
+			// send initial world state
+			s.sendInitialWorldState(client, initialState.Payload)
+
+			// then send over collated diffs
+			for _, diff := range s.diffsSinceInitialWorldStateBuilding {
+				client.WriteMessage(diff)
+			}
+
+			s.clientsMutex.Lock()
+			s.Clients[client.ID] = client
+			s.clientsMutex.Unlock()
+
+			delete(s.pendingClients, client.ID)
+		}
+
+		for _, client := range s.pendingClientsReadOnly {
+			// send initial world state
+			s.sendInitialWorldState(client, initialState.Payload)
+
+			// then send over collated diffs
+			for _, diff := range s.diffsSinceInitialWorldStateBuilding {
+				client.WriteMessage(diff)
+			}
+
+			s.clientsReadOnlyMutex.Lock()
+			s.ClientsReadOnly[client.ID] = client
+			s.clientsReadOnlyMutex.Unlock()
+
+			delete(s.pendingClientsReadOnly, client.ID)
+		}
+
+		s.diffsSinceInitialWorldStateBuilding = nil
+
+	default:
+		//pass for now
+	}
+
 	// Handle connections and disconnections first
 	s.handleClientConnectionsAndDisconnections()
 
@@ -279,9 +350,11 @@ func (s *GServer) doTick() {
 
 	// Build diff from changes and send to clients
 	diff := s.WorldController.BuildWorldDiff()
-	err := s.MessageRouter.PushWorldDiffMessage(&diff)
+	payload, err := s.MessageRouter.PushWorldDiffMessage(&diff)
 	if err != nil {
 		log.Printf("Failed to push world diff message: %s", err)
+	} else if s.initialWorldStateBuilding {
+		s.diffsSinceInitialWorldStateBuilding = append(s.diffsSinceInitialWorldStateBuilding, payload)
 	}
 
 	s.MessageRouter.Flush(currentClients, currentClientsReadOnly)
@@ -307,8 +380,8 @@ func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {
 		}
 
 		minX := player.Pos.X - simulateRangeX
-		maxX := player.Pos.Y - simulateRangeX
-		minY := player.Pos.X + simulateRangeY
+		maxX := player.Pos.X + simulateRangeX
+		minY := player.Pos.Y - simulateRangeY
 		maxY := player.Pos.Y + simulateRangeY
 
 		npcRangeSet := s.WorldController.npcSpatialIndex.QueryPosRange(minX, maxX, minY, maxY)
@@ -345,40 +418,43 @@ func (s *GServer) getClient(clientID string) *GServerClient {
 }
 
 func (s *GServer) handleClientConnectionsAndDisconnections() {
-	s.clientsMutex.Lock()
-
+	s.queuedConnectionsMutex.Lock()
 	connections := s.queuedConnections
-	disconnections := s.queuedDisconnections
-
 	s.queuedConnections = nil
-	s.queuedDisconnections = nil
+	s.queuedConnectionsMutex.Unlock()
 
+	s.queuedConnectionsReadOnlyMutex.Lock()
+	connectionsReadOnly := s.queuedConnectionsReadOnly
+	s.queuedConnectionsReadOnly = nil
+	s.queuedConnectionsReadOnlyMutex.Unlock()
+
+	s.clientsMutex.Lock()
+	disconnections := s.queuedDisconnections
+	s.queuedDisconnections = nil
 	s.clientsMutex.Unlock()
 
 	if len(connections) > 0 {
-		initialWorldStateMessage, err := s.buildInitialWorldStateMessage()
-		if err != nil {
-			log.Printf("Failed to build initial world state message - who knows what will happend: %s", err)
-		}
-
 		// Handle new connections
-		for _, clientID := range connections {
+		for _, client := range connections {
 
-			client := s.getClient(clientID)
-
-			if client == nil {
+			if err := s.WorldController.SpawnNewPlayer(client.ID); err != nil {
+				client.Close()
 				continue
 			}
 
-			err := s.WorldController.SpawnNewPlayer(clientID)
-			if err != nil {
-				s.removeClient(s.Clients[clientID])
-				continue
-			}
-
-			s.sendInitialWorldState(client, initialWorldStateMessage)
-			s.MessageRouter.PushGlobalLogMessage("GLOBAL", fmt.Sprintf("Player %s joined", clientID))
+			s.pendingClients[client.ID] = client
 		}
+	}
+
+	if len(connectionsReadOnly) > 0 {
+		// Handle new connections
+		for _, client := range connectionsReadOnly {
+			s.pendingClientsReadOnly[client.ID] = client
+		}
+	}
+
+	if len(s.pendingClients) > 0 || len(s.pendingClientsReadOnly) > 0 {
+		s.startInitialWorldStateBuilding()
 	}
 
 	// Handle queuedDisconnections
@@ -424,4 +500,43 @@ func (s *GServer) handleMessages(
 
 	}
 
+}
+
+func (s *GServer) startInitialWorldStateBuilding() {
+	if s.initialWorldStateBuilding {
+		return
+	}
+
+	s.initialWorldStateBuilding = true
+
+	initialWorldState := s.WorldController.GameWorld.Copy()
+
+	go func(initialWorldState *game.GameWorld) {
+
+		// First message is world state
+		serverInitialWorldStateMessage, err := messages.NewGServerInitialWorldStateMessage(initialWorldState)
+		if err != nil {
+			s.initialWorldStateResult <- InitialWorldStateResult{
+				Payload: nil,
+				Err:     err,
+			}
+			return
+		}
+
+		// Marshal the message
+		worldState, err := json.Marshal(serverInitialWorldStateMessage)
+		if err != nil {
+			log.Printf("failed to build initial world state: %s", err)
+			s.initialWorldStateResult <- InitialWorldStateResult{
+				Payload: nil,
+				Err:     err,
+			}
+			return
+		}
+
+		s.initialWorldStateResult <- InitialWorldStateResult{
+			Payload: worldState,
+			Err:     nil,
+		}
+	}(initialWorldState)
 }

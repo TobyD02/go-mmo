@@ -51,20 +51,20 @@ func (m *GMessageRouter) Flush(
 	clear(m.clientMessages)
 }
 
-func (m *GMessageRouter) PushWorldDiffMessage(worldDiff *game.GameWorldDiff) error {
+func (m *GMessageRouter) PushWorldDiffMessage(worldDiff *game.GameWorldDiff) ([]byte, error) {
 	msg, err := messages.NewGServerWorldDiffMessage(worldDiff)
 	if err != nil {
-		return fmt.Errorf("failed to generate world diff message")
+		return nil, fmt.Errorf("failed to generate world diff message")
 	}
 
 	encoded, err := msg.Encode()
 
 	if err != nil {
-		return fmt.Errorf("failed to generate world diff message: %s", err)
+		return nil, fmt.Errorf("failed to generate world diff message: %s", err)
 	}
 
 	m.pushGlobalMessage(encoded)
-	return nil
+	return encoded, nil
 }
 
 func (m *GMessageRouter) PushClientLogMessage(clientID string, scope string, message string) {

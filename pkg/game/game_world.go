@@ -34,6 +34,57 @@ func NewGameWorld(width, height int) *GameWorld {
 	}
 }
 
+func (g *GameWorld) Copy() *GameWorld {
+	if g == nil {
+		return nil
+	}
+
+	// 1. Deep copy 2D slice
+	mapCopy := make([][]GameWorldTile, len(g.Map))
+	for y, row := range g.Map {
+		rowCopy := make([]GameWorldTile, len(row))
+		copy(rowCopy, row)
+		mapCopy[y] = rowCopy
+	}
+
+	// 2. Deep copy Players map & instances
+	playersCopy := make(map[string]*GPlayer, len(g.Players))
+	for k, v := range g.Players {
+		if v != nil {
+			playerCopy := *v // Value copy of GPlayer struct
+			playersCopy[k] = &playerCopy
+		}
+	}
+
+	// 3. Deep copy Npcs map & instances
+	npcsCopy := make(map[string]*GNpcInstance, len(g.Npcs))
+	for k, v := range g.Npcs {
+		if v != nil {
+			npcCopy := *v // Value copy of GNpcInstance struct
+			npcsCopy[k] = &npcCopy
+		}
+	}
+
+	// 4. Deep copy Interactables map & instances
+	interactablesCopy := make(map[string]*GInteractableInstance, len(g.Interactables))
+	for k, v := range g.Interactables {
+		if v != nil {
+			interactableCopy := *v // Value copy of GInteractableInstance struct
+			interactablesCopy[k] = &interactableCopy
+		}
+	}
+
+	return &GameWorld{
+		Map:           mapCopy,
+		Players:       playersCopy,
+		Npcs:          npcsCopy,
+		Interactables: interactablesCopy,
+		Width:         g.Width,
+		Height:        g.Height,
+		SpawnPoint:    g.SpawnPoint, // Copy by value
+	}
+}
+
 func (g *GameWorld) ApplyDiff(diff *GameWorldDiff) {
 	for _, mapDiff := range diff.MapDiff {
 		pos := mapDiff.Pos

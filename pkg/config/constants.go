@@ -4,8 +4,8 @@ package config
 import "time"
 
 // World / simulation dimensions, measured in tiles.
-const ClientSimulationRangeX = 64
-const ClientSimulationRangeY = 28
+const ClientSimulationRangeX = 32
+const ClientSimulationRangeY = 14
 
 // Client viewport, measured in world tiles.
 const ClientViewportTilesX = 64
