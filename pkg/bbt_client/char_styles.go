@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/game"
 )
 
@@ -33,11 +34,54 @@ var interactableOccupiedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#
 var interactableOccupiedOtherStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#c2a065")).Bold(true)
 var interactableCooldownStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#1a3847")).Bold(true)
 
-var gameStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderTop(true).BorderBottom(true).BorderLeft(true).BorderRight(true)
-var worldStyle = lipgloss.NewStyle().Width(128).Height(31).Border(lipgloss.NormalBorder(), false, false, true, false)
-var inventoryStyle = lipgloss.NewStyle().Width(27).Height(11).Border(lipgloss.NormalBorder(), false, true, false, false)
-var logStyle = lipgloss.NewStyle().Width(100).Height(11)
-var chatStyle = lipgloss.NewStyle().Width(128).Height(2).Border(lipgloss.NormalBorder(), true, false, false, false)
+// World viewport dimensions in terminal characters.
+var worldWidth = config.ClientViewportTilesX * config.ClientTileWidth
+var worldHeight = config.ClientViewportTilesY
+
+// Inventory/log area below the world.
+var invWidth = worldWidth / 4
+var invHeight = config.ClientRows - worldHeight - 1 - 2
+
+// -1 = world border
+// -2 = chat height
+var logWidth = worldWidth - invWidth
+var logHeight = invHeight
+
+// Chat spans the full viewport width.
+var chatWidth = worldWidth
+var chatHeight = 2
+
+// Overall game dimensions.
+var styleX = worldWidth
+var styleY = config.ClientRows
+
+var gameStyle = lipgloss.NewStyle().
+	Width(styleX).
+	Height(styleY).
+	Border(lipgloss.DoubleBorder()).
+	BorderTop(true).
+	BorderBottom(true).
+	BorderLeft(true).
+	BorderRight(true)
+
+var worldStyle = lipgloss.NewStyle().
+	Width(worldWidth).
+	Height(worldHeight).
+	Border(lipgloss.NormalBorder(), false, false, true, false)
+
+var inventoryStyle = lipgloss.NewStyle().
+	Width(invWidth).
+	Height(invHeight).
+	Border(lipgloss.NormalBorder(), false, true, false, false)
+
+var logStyle = lipgloss.NewStyle().
+	Width(logWidth).
+	Height(logHeight)
+
+var chatStyle = lipgloss.NewStyle().
+	Width(chatWidth).
+	Height(chatHeight).
+	Border(lipgloss.NormalBorder(), true, false, false, false)
 
 func drawTile(b *strings.Builder, tile game.GameWorldTile) {
 	b.WriteString(TileStyles[tile].Render(TileChars[tile]))

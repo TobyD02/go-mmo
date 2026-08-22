@@ -4,13 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/tobyd02/go-mmo/pkg/game"
 	"github.com/tobyd02/go-mmo/pkg/messages"
 )
-
-const GClientTickSpeed = time.Millisecond * 50
 
 type GClient struct {
 	conn     ClientWebsocket

@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/tobyd02/go-mmo/pkg/client"
+	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/game"
 )
 
@@ -55,7 +56,7 @@ func InitialModel(
 
 func tick() tea.Cmd {
 	return tea.Tick(
-		client.GClientTickSpeed,
+		config.ClientTickSpeed,
 		func(time.Time) tea.Msg {
 			return GameTickMsg{}
 		},
@@ -201,8 +202,8 @@ func (m GameModel) View() tea.View {
 	var log strings.Builder
 	var inventory strings.Builder
 
-	viewportWidth := 64
-	viewportHeight := 31
+	viewportWidth := config.ClientViewportTilesX
+	viewportHeight := config.ClientViewportTilesY
 
 	clientPlayer := m.clientWorld.QueryPlayer(m.client.ClientID)
 	if clientPlayer == nil {
@@ -260,7 +261,7 @@ func (m GameModel) View() tea.View {
 	}
 
 	for i := range m.client.Logs {
-		if i < 9 {
+		if i < invHeight-1 {
 			logMessage := m.client.Logs[len(m.client.Logs)-i-1]
 			msg := fmt.Sprintf("%s | %s\n", logMessage.Scope, logMessage.Message)
 			log.WriteString(msg)
@@ -270,7 +271,7 @@ func (m GameModel) View() tea.View {
 	log.WriteString(fmt.Sprintf("CMD | %s", m.chatOutput))
 
 	// Draw pos at top of inventory
-	fmt.Fprintf(&inventory, "x: %d | y : %d\n", centerX, centerY)
+	fmt.Fprintf(&inventory, "(%d, %d)\n", centerX, centerY)
 
 	itemIDs := make([]string, 0, len(clientPlayer.Inventory))
 
@@ -282,7 +283,7 @@ func (m GameModel) View() tea.View {
 	for _, itemID := range itemIDs {
 		name := game.GetItemNameFromRegistry(itemID)
 		amount := clientPlayer.Inventory[itemID]
-		fmt.Fprintf(&inventory, "%s | %d\n", name, amount)
+		fmt.Fprintf(&inventory, "%-12s | %d\n", name, amount)
 	}
 
 	chatContent := "> "

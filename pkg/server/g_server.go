@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/messages"
 )
 
@@ -288,8 +289,8 @@ func (s *GServer) doTick() {
 
 func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {
 	// @todo move to config/const
-	simulateRangeX := 20
-	simulateRangeY := 20
+	simulateRangeX := config.ClientSimulationRangeX
+	simulateRangeY := config.ClientSimulationRangeX
 
 	npcSet := make(map[string]struct{})
 	interactableSet := make(map[string]struct{})
