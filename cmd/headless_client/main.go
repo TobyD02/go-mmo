@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tobyd02/go-mmo/pkg/client"
+	"github.com/tobyd02/go-mmo/pkg/config"
 )
 
 func main() {
@@ -48,7 +49,7 @@ func main() {
 
 	// client ticker
 
-	ticker := time.NewTicker(client.GClientTickSpeed)
+	ticker := time.NewTicker(config.ClientTickSpeed)
 	defer ticker.Stop()
 
 	for range ticker.C {
