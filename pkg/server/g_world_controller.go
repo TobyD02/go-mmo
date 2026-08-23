@@ -246,11 +246,6 @@ func (wc *GWorldController) MovePlayer(client *GServerClient, dx, dy int) {
 
 	wc.changedPlayers[client.ID] = struct{}{}
 	wc.playerSpatialIndex.Update(client.ID, playerOldPos, player.Pos)
-
-	wc.SetTile(playerOldPos, game.TileWall)
-
-	// wc.getMessageRouter().PushClientLogMessage(client.ID, "CLIENT", fmt.Sprintf("moved from %d to %d", player.Pos.X, player.Pos.Y))
-	// log.Printf("WORLD | %s moved to x: %v y: %v", player.ID, player.Pos.X, player.Pos.Y)
 }
 
 func (wc *GWorldController) SetTile(pos util.Vec2, tile game.GameWorldTile) {

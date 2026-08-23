@@ -1,5 +1,15 @@
 # Concept
 
+**Known Issues**
+
+- Large number of clients connecting when world size is _**very**_ big can cause issues.
+  - Most likely because we are packaging the full world payload.
+  - Could only send chunk diffs - would require a lot of rewriting
+    - Would also make the whole async world connection kind of redundant
+  - probably a smart fix somewhere
+  - For now though - stick to 1000x1000 world (or smaller if need be)
+    - Plan is to eventually spawn multiple servers anyway - optimizations on server were secondary solution
+
 ## Building (web)
 
 1. Runs the POC ebit client in web browser (http://localhost:8081)
