@@ -27,8 +27,13 @@ type GWorldController struct {
 }
 
 func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getMessageRouter func() *GMessageRouter) *GWorldController {
+	gameWorld, err := game.NewGameWorld("./data/world.txt")
+	if err != nil {
+		panic(err)
+	}
+
 	return &GWorldController{
-		GameWorld:        game.NewGameWorld(worldWidth, worldHeight),
+		GameWorld:        gameWorld,
 		getServerTick:    getTicker,
 		getMessageRouter: getMessageRouter,
 
@@ -43,10 +48,7 @@ func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getM
 	}
 }
 
-func (wc *GWorldController) SetupWorld(
-	edgeWalls bool,
-) {
-
+func (wc *GWorldController) SetupWorld() {
 	npcRegistry, err := game.GetNpcRegistry()
 	if err != nil {
 		log.Fatalf("failed to get npc registry")
@@ -60,30 +62,26 @@ func (wc *GWorldController) SetupWorld(
 	log.Println("Starting world generation")
 
 	for y, row := range wc.GameWorld.Map {
-		log.Printf("Generating Row %d", y)
-		for x := range row {
-			if (x == 0 || x == wc.GameWorld.Width-1) || (y == 0 || y == wc.GameWorld.Height-1) {
-				if edgeWalls {
-					wc.GameWorld.Map[y][x] = game.TileWall
-				}
-			} else {
-				// Not on a wall, so spawn an interactable (sometimes)
+		for x, tile := range row {
 
-				if x != wc.GameWorld.SpawnPoint.X && y != wc.GameWorld.SpawnPoint.Y {
-					randInt := rand.IntN(100)
-					if randInt == 1 {
-						interactableID, err := util.GetRandomIDFromRegistry(interactableRegistry)
-						if err != nil {
-							continue
-						}
-						wc.AddInteractableInstance(game.NewGInteractableInstance(interactableID, x, y))
-					} else if randInt == 2 {
-						npcID, err := util.GetRandomIDFromRegistry(npcRegistry)
-						if err != nil {
-							continue
-						}
-						wc.AddNpcInstance(game.NewGNpcInstance(npcID, x, y))
+			if tile == game.TileWall {
+				continue
+			}
+
+			if x != wc.GameWorld.SpawnPoint.X && y != wc.GameWorld.SpawnPoint.Y {
+				randInt := rand.IntN(100)
+				if randInt == 1 {
+					interactableID, err := util.GetRandomIDFromRegistry(interactableRegistry)
+					if err != nil {
+						continue
 					}
+					wc.AddInteractableInstance(game.NewGInteractableInstance(interactableID, x, y))
+				} else if randInt == 2 {
+					npcID, err := util.GetRandomIDFromRegistry(npcRegistry)
+					if err != nil {
+						continue
+					}
+					wc.AddNpcInstance(game.NewGNpcInstance(npcID, x, y))
 				}
 			}
 		}
@@ -150,7 +148,7 @@ func (wc *GWorldController) AddInteractableInstance(interactableInstance *game.G
 	if len(wc.interactableSpatialIndex.QueryPos(interactableInstance.Pos.X, interactableInstance.Pos.Y)) != 0 {
 		return // Only a single interactableInstance in a tile
 	}
-	if wc.GameWorld.QueryMap(interactableInstance.Pos.X, interactableInstance.Pos.Y) != game.TileWalkable {
+	if !game.CanWalk(wc.GameWorld.QueryMap(interactableInstance.Pos.X, interactableInstance.Pos.Y)) {
 		return // Only on walkable tiles, not inside a wall
 	}
 
@@ -160,7 +158,7 @@ func (wc *GWorldController) AddInteractableInstance(interactableInstance *game.G
 }
 
 func (wc *GWorldController) AddNpcInstance(npcInstance *game.GNpcInstance) {
-	if wc.GameWorld.QueryMap(npcInstance.Pos.X, npcInstance.Pos.Y) != game.TileWalkable {
+	if !game.CanWalk(wc.GameWorld.QueryMap(npcInstance.Pos.X, npcInstance.Pos.Y)) {
 		return // Only on walkable tiles, not inside a wall
 	}
 
@@ -187,7 +185,8 @@ func (wc *GWorldController) SpawnNewPlayer(playerID string) error {
 }
 
 func (wc *GWorldController) AddPlayer(playerID string, x, y int) error {
-	if wc.GameWorld.QueryMap(x, y) != game.TileWalkable {
+	// can only spawn on walkable tiles
+	if !game.CanWalk(wc.GameWorld.QueryMap(x, y)) {
 		return fmt.Errorf("Cannot add player")
 	}
 
@@ -231,7 +230,7 @@ func (wc *GWorldController) MovePlayer(client *GServerClient, dx, dy int) {
 		return
 	}
 
-	if wc.GameWorld.QueryMap(newX, newY) != game.TileWalkable {
+	if !game.CanWalk(wc.GameWorld.QueryMap(newX, newY)) {
 		return // Cannot move to unwalkable tile
 	}
 
@@ -284,7 +283,7 @@ func (wc *GWorldController) MoveNpc(npcInstanceID string, dx, dy int) {
 		return
 	}
 
-	if wc.GameWorld.QueryMap(newX, newY) != game.TileWalkable {
+	if !game.CanWalk(wc.GameWorld.QueryMap(newX, newY)) {
 		return // Cannot move to unwalkable tile
 	}
 
@@ -484,7 +483,7 @@ func (wc *GWorldController) DoNpcs(npcInstanceIDs map[string]struct{}) {
 			continue
 		}
 
-		if free := wc.GameWorld.QueryMap(newX, newY); free != game.TileWalkable {
+		if !game.CanWalk(wc.GameWorld.QueryMap(newX, newY)) {
 			continue
 		}
 

@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Game Map Editor</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 20px;
+
+        font-family: monospace;
+
+        background: #1a1a1a;
+        color: white;
+      }
+
+      h1 {
+        margin-top: 0;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+
+        align-items: center;
+
+        padding: 15px;
+        margin-bottom: 15px;
+
+        background: #252525;
+        border: 1px solid #444;
+      }
+
+      label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      input {
+        width: 70px;
+
+        padding: 6px;
+
+        background: #111;
+        color: white;
+
+        border: 1px solid #555;
+      }
+
+      button {
+        padding: 8px 14px;
+
+        cursor: pointer;
+
+        background: #333;
+        color: white;
+
+        border: 1px solid #666;
+      }
+
+      button:hover {
+        background: #444;
+      }
+
+      button.active {
+        background: #666;
+        border-color: white;
+      }
+
+      #canvas-container {
+        width: 100%;
+        height: 75vh;
+
+        overflow: auto;
+
+        border: 1px solid #555;
+
+        background: #111;
+      }
+
+      canvas {
+        display: block;
+
+        cursor: crosshair;
+
+        image-rendering: pixelated;
+      }
+
+      .info {
+        margin-top: 15px;
+        color: #aaa;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Game Map Editor</h1>
+
+    <div class="controls">
+      <label>
+        Map Width
+        <input id="width" type="number" value="88" min="1" />
+      </label>
+
+      <label>
+        Map Height
+        <input id="height" type="number" value="52" min="1" />
+      </label>
+
+      <button id="resizeButton">Create / Resize</button>
+
+      <label>
+        Zoom
+        <input id="zoom" type="number" value="12" min="2" max="100" />
+      </label>
+
+      <label>
+        Brush
+        <input id="brushSize" type="number" value="1" min="1" max="50" />
+      </label>
+
+      <button id="brushButton" class="active">Brush</button>
+
+      <button id="fillToolButton">Fill Tool</button>
+
+      <button id="clearButton">Clear</button>
+
+      <button id="fillAllButton">Fill All</button>
+
+      <button id="saveButton">Save .txt</button>
+    </div>
+
+    <div id="canvas-container">
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="info">
+      <div>Left click: paint</div>
+
+      <div>Right click or Shift + click: erase</div>
+
+      <div>Mouse wheel: zoom</div>
+
+      <div>Brush size paints multiple tiles</div>
+
+      <div>Fill tool flood-fills connected tiles</div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+
+      const ctx = canvas.getContext("2d");
+
+      const widthInput = document.getElementById("width");
+
+      const heightInput = document.getElementById("height");
+
+      const zoomInput = document.getElementById("zoom");
+
+      const brushSizeInput = document.getElementById("brushSize");
+
+      const resizeButton = document.getElementById("resizeButton");
+
+      const brushButton = document.getElementById("brushButton");
+
+      const fillToolButton = document.getElementById("fillToolButton");
+
+      const clearButton = document.getElementById("clearButton");
+
+      const fillAllButton = document.getElementById("fillAllButton");
+
+      const saveButton = document.getElementById("saveButton");
+
+      let mapWidth = 88;
+      let mapHeight = 52;
+
+      let zoom = 12;
+
+      let brushSize = 1;
+
+      let grid = [];
+
+      let isDrawing = false;
+
+      let drawValue = 1;
+
+      /*
+|--------------------------------------------------------------------------
+| Current Tool
+|--------------------------------------------------------------------------
+*/
+
+      let currentTool = "brush";
+
+      /*
+|--------------------------------------------------------------------------
+| Create Grid
+|--------------------------------------------------------------------------
+*/
+
+      function createGrid() {
+        mapWidth = parseInt(widthInput.value);
+
+        mapHeight = parseInt(heightInput.value);
+
+        grid = Array.from({ length: mapHeight }, () => Array(mapWidth).fill(0));
+
+        resizeCanvas();
+      }
+
+      /*
+|--------------------------------------------------------------------------
+| Resize Canvas
+|--------------------------------------------------------------------------
+*/
+
+      function resizeCanvas() {
+        zoom = parseInt(zoomInput.value);
+
+        canvas.width = mapWidth * zoom;
+
+        canvas.height = mapHeight * zoom;
+
+        draw();
+      }
+
+      /*
+|--------------------------------------------------------------------------
+| Draw World
+|--------------------------------------------------------------------------
+*/
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (let y = 0; y < mapHeight; y++) {
+          for (let x = 0; x < mapWidth; x++) {
+            const pixelX = x * zoom;
+
+            const pixelY = y * zoom;
+
+            /*
+             * Filled tile
+             */
+
+            if (grid[y][x] === 1) {
+              ctx.fillStyle = "#ffffff";
+
+              ctx.fillRect(pixelX, pixelY, zoom, zoom);
+            }
+
+            /*
+             * Grid
+             *
+             * Don't draw grid if
+             * zoom is extremely small.
+             */
+
+            if (zoom >= 4) {
+              ctx.strokeStyle = "#555";
+
+              ctx.lineWidth = 1;
+
+              ctx.strokeRect(pixelX + 0.5, pixelY + 0.5, zoom, zoom);
+            }
+          }
+        }
+      }
+
+      /*
+|--------------------------------------------------------------------------
+| Get Tile Position
+|--------------------------------------------------------------------------
+*/
+
+      function getTilePosition(event) {
+        const rect = canvas.getBoundingClientRect();
+
+        const x = Math.floor((event.clientX - rect.left) / zoom);
+
+        const y = Math.floor((event.clientY - rect.top) / zoom);
+
+        return {
+          x,
+          y,
+        };
+      }
+
+      /*
+|--------------------------------------------------------------------------
+| Paint Brush
+|--------------------------------------------------------------------------
+*/
+
+      function paintBrush(centerX, centerY, value) {
+        brushSize = parseInt(brushSizeInput.value);
+
+        const half = Math.floor(brushSize / 2);
+
+        /*
+         * Square brush.
+         */
+
+        for (let y = centerY - half; y <= centerY + half; y++) {
+          for (let x = centerX - half; x <= centerX + half; x++) {
+            if (x < 0 || x >= mapWidth || y < 0 || y >= mapHeight) {
+              continue;
+            }
+
+            grid[y][x] = value;
+          }
+        }
+      }
+
+      /*
+|--------------------------------------------------------------------------
+| Flood Fill
+|--------------------------------------------------------------------------
+*/
+
+      function floodFill(startX, startY, newValue) {
+        if (
+          startX < 0 ||
+          startX >= mapWidth ||
+          startY < 0 ||
+          startY >= mapHeight
+        ) {
+          return;
+        }
+
+        const targetValue = grid[startY][startX];
+
+        /*
+         * Nothing to change.
+         */
+
+        if (targetValue === newValue) {
+          return;
+        }
+
+        const stack = [
+          {
+            x: startX,
+            y: startY,
+          },
+        ];
+
+        while (stack.length > 0) {
+          const position = stack.pop();
+
+          const x = position.x;
+
+          const y = position.y;
+
+          /*
+           * Outside world.
+           */
+
+          if (x < 0 || x >= mapWidth || y < 0 || y >= mapHeight) {
+            continue;
+          }
+
+          /*
+           * Different tile.
+           */
+
+          if (grid[y][x] !== targetValue) {
+            continue;
+          }
+
+          grid[y][x] = newValue;
+
+          stack.push(
+            { x: x + 1, y },
+            { x: x - 1, y },
+            { x, y: y + 1 },
+            { x, y: y - 1 },
+          );
+        }
+      }
+
+      /*
+|--------------------------------------------------------------------------
+| Apply Tool
+|--------------------------------------------------------------------------
+*/
+
+      function applyTool(event) {
+        const { x, y } = getTilePosition(event);
+
+        if (currentTool === "fill") {
+          floodFill(x, y, drawValue);
+        } else {
+          paintBrush(x, y, drawValue);
+        }
+
+        draw();
+      }
+
+      /*
+|--------------------------------------------------------------------------
+| Mouse Controls
+|--------------------------------------------------------------------------
+*/
+
+      canvas.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+      });
+
+      canvas.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+
+        isDrawing = true;
+
+        if (event.button === 2 || event.shiftKey) {
+          drawValue = 0;
+        } else {
+          drawValue = 1;
+        }
+
+        applyTool(event);
+      });
+
+      canvas.addEventListener("mousemove", (event) => {
+        if (!isDrawing) {
+          return;
+        }
+
+        /*
+         * Flood fill should
+         * only happen once.
+         */
+
+        if (currentTool === "fill") {
+          return;
+        }
+
+        applyTool(event);
+      });
+
+      window.addEventListener("mouseup", () => {
+        isDrawing = false;
+      });
+
+      /*
+|--------------------------------------------------------------------------
+| Zoom With Mouse Wheel
+|--------------------------------------------------------------------------
+*/
+
+      canvas.addEventListener(
+        "wheel",
+        (event) => {
+          event.preventDefault();
+
+          if (event.deltaY < 0) {
+            zoom = Math.min(zoom + 1, 100);
+          } else {
+            zoom = Math.max(zoom - 1, 2);
+          }
+
+          zoomInput.value = zoom;
+
+          resizeCanvas();
+        },
+        {
+          passive: false,
+        },
+      );
+
+      /*
+|--------------------------------------------------------------------------
+| Tool Buttons
+|--------------------------------------------------------------------------
+*/
+
+      brushButton.addEventListener("click", () => {
+        currentTool = "brush";
+
+        brushButton.classList.add("active");
+
+        fillToolButton.classList.remove("active");
+      });
+
+      fillToolButton.addEventListener("click", () => {
+        currentTool = "fill";
+
+        fillToolButton.classList.add("active");
+
+        brushButton.classList.remove("active");
+      });
+
+      /*
+|--------------------------------------------------------------------------
+| Zoom Input
+|--------------------------------------------------------------------------
+*/
+
+      zoomInput.addEventListener("change", () => {
+        resizeCanvas();
+      });
+
+      /*
+|--------------------------------------------------------------------------
+| Resize Map
+|--------------------------------------------------------------------------
+*/
+
+      resizeButton.addEventListener("click", () => {
+        const confirmed = confirm(
+          "Resizing will clear the current map. Continue?",
+        );
+
+        if (!confirmed) {
+          return;
+        }
+
+        createGrid();
+      });
+
+      /*
+|--------------------------------------------------------------------------
+| Clear Map
+|--------------------------------------------------------------------------
+*/
+
+      clearButton.addEventListener("click", () => {
+        for (let y = 0; y < mapHeight; y++) {
+          grid[y].fill(0);
+        }
+
+        draw();
+      });
+
+      /*
+|--------------------------------------------------------------------------
+| Fill Entire Map
+|--------------------------------------------------------------------------
+*/
+
+      fillAllButton.addEventListener("click", () => {
+        for (let y = 0; y < mapHeight; y++) {
+          grid[y].fill(1);
+        }
+
+        draw();
+      });
+
+      /*
+|--------------------------------------------------------------------------
+| Save TXT
+|--------------------------------------------------------------------------
+*/
+
+      saveButton.addEventListener("click", () => {
+        let output = "";
+
+        for (let y = 0; y < mapHeight; y++) {
+          output += grid[y].join(",");
+
+          /*
+           * Every row,
+           * including the last,
+           * ends with newline.
+           */
+
+          output += "\n";
+        }
+
+        const blob = new Blob([output], {
+          type: "text/plain",
+        });
+
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+
+        link.href = url;
+
+        link.download = "world.txt";
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        link.remove();
+
+        URL.revokeObjectURL(url);
+      });
+
+      /*
+|--------------------------------------------------------------------------
+| Initial World
+|--------------------------------------------------------------------------
+*/
+
+      createGrid();
+    </script>
+  </body>
+</html>

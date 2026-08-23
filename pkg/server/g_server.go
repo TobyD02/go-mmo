@@ -89,7 +89,7 @@ func NewGServer(tickSpeed time.Duration, worldWidth int, worldHeight int) *GServ
 			return server.MessageRouter
 		},
 	)
-	worldController.SetupWorld(true)
+	worldController.SetupWorld()
 
 	server.WorldController = worldController
 	return server

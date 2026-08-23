@@ -9,13 +9,14 @@ import (
 )
 
 var TileChars = map[game.GameWorldTile]string{
-	game.TileWalkable: "..",
-	game.TileWall:     "██",
+	game.TileFloor: "..",
+	game.TileWall:  "██",
+	game.TileSpawn: "SS",
 }
 
 var TileStyles = map[game.GameWorldTile]lipgloss.Style{
-	game.TileWalkable: lipgloss.NewStyle().Foreground(lipgloss.Color("#383838")).Bold(true),
-	game.TileWall:     lipgloss.NewStyle().Foreground(lipgloss.Color("#919191")).Bold(true),
+	game.TileFloor: lipgloss.NewStyle().Foreground(lipgloss.Color("#383838")).Bold(true),
+	game.TileWall:  lipgloss.NewStyle().Foreground(lipgloss.Color("#919191")).Bold(true),
 }
 
 var (

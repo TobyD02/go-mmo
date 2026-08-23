@@ -1,5 +1,30 @@
 # Concept
 
+## TODO
+
+- [ ] Build real world building tool (perhaps with ebitengine)
+  - Should be aware of all tile types (floor, wall, spawn, etc...)
+  - Should also (technically) be able to place interactables.
+  - So long as the world loading script knows what to do with them (i.e. when you see an interactable in the file, add the interactable to the interactables array and place the tile as just floor (or something doesn't really matter)).
+  - Technically could do the same for NPC's as well - that way the initial world state can be fully dependent on the file.
+  - Then - once all of this is done, need to work on client and server unification
+    - If both are generating the world from the file - then on connection client only needs to know the diff from the server.
+    - Server side - change inital connection message generation.
+    - Rather than packing the full world, on creation save a copy of the initial world state.
+    - Then, when preparing for a client, calculate the diff between the initial state and current state.
+    - When client receives this diff, it should be in sync with the server world
+      - The only issue will be that the computation of the world diff will have to be modified - since we wont have the world controller to tell us what things have changed.
+      - Might be able to quickly/easily just say check everything? Instead of looping over changed, loop over all. And compare against another world state to check for changes.
+      - Though this may be slow (which is fine since connections are async) the payload just be substantially smaller than sending a full massive world
+    - Alternatively, could try saving every single diff payload, and on connection just send all of them. But i think with server lifetime this will not scale.
+- [ ] Improved world gen and connection
+  - Client builds initial world state locally first.
+  - Server's first message builds a diff comparing the original world state to the current. (i.e. a world diff message, but compare against a copy of the original world state)
+  - Clients first message is the major diff, and then the smaller subsequent diffs that accumulated whilst diff was being generated.
+- [ ] Implement player saving state
+  - Current have a proof of concept for player saving and loading. Just need to integrate it into the server.
+  - see `cmd/test`
+
 **Known Issues**
 
 - Large number of clients connecting when world size is _**very**_ big can cause issues.
