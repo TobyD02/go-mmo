@@ -37,9 +37,9 @@ func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getM
 		changedInteractables: make(map[string]struct{}),
 		changedTiles:         make(map[util.Vec2]struct{}),
 
-		npcSpatialIndex:          make(util.GSpatialIndex),
-		interactableSpatialIndex: make(util.GSpatialIndex),
-		playerSpatialIndex:       make(util.GSpatialIndex),
+		npcSpatialIndex:          util.NewGSpatialIndex(),
+		interactableSpatialIndex: util.NewGSpatialIndex(),
+		playerSpatialIndex:       util.NewGSpatialIndex(),
 	}
 }
 
@@ -310,7 +310,7 @@ func (wc *GWorldController) MoveNpc(npcInstanceID string, dx, dy int) {
 }
 
 func (wc *GWorldController) QuickNpcInstancesQueryAtPos(x, y int) map[string]*game.GNpcInstance {
-	ids := wc.npcSpatialIndex[util.Vec2{X: x, Y: y}]
+	ids := wc.npcSpatialIndex.QueryPos(x, y)
 	instances := make(map[string]*game.GNpcInstance)
 	for instanceID := range ids {
 		instances[instanceID] = wc.GameWorld.Npcs[instanceID]
@@ -320,7 +320,7 @@ func (wc *GWorldController) QuickNpcInstancesQueryAtPos(x, y int) map[string]*ga
 }
 
 func (wc *GWorldController) QuickInteractableInstancesQueryAtPos(x, y int) *game.GInteractableInstance {
-	ids := wc.interactableSpatialIndex[util.Vec2{X: x, Y: y}]
+	ids := wc.interactableSpatialIndex.QueryPos(x, y)
 	for instanceID := range ids {
 		return wc.GameWorld.Interactables[instanceID]
 	}
@@ -329,7 +329,7 @@ func (wc *GWorldController) QuickInteractableInstancesQueryAtPos(x, y int) *game
 }
 
 func (wc *GWorldController) QuickPlayersQueryAtPos(x, y int) map[string]*game.GPlayer {
-	ids := wc.playerSpatialIndex[util.Vec2{X: x, Y: y}]
+	ids := wc.playerSpatialIndex.QueryPos(x, y)
 	instances := make(map[string]*game.GPlayer)
 	for instanceID := range ids {
 		instances[instanceID] = wc.GameWorld.Players[instanceID]

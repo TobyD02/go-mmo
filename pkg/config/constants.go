@@ -25,3 +25,6 @@ const ClientColumns = ClientViewportTilesX + 2
 // Spawn Protection
 const SpawnProtectionRadius = 10
 const SpawnProtectionRadiusSquared = SpawnProtectionRadius * SpawnProtectionRadius
+
+// Chunking
+const ChunkSize = 32

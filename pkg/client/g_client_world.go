@@ -16,9 +16,9 @@ type GClientWorld struct {
 func NewGClientWorld(gameWorld *game.GameWorld) *GClientWorld {
 	c := &GClientWorld{
 		gameWorld:                        gameWorld,
-		playerSpatialIndex:               make(util.GSpatialIndex),
-		npcInstanceSpatialIndex:          make(util.GSpatialIndex),
-		interactableInstanceSpatialIndex: make(util.GSpatialIndex),
+		playerSpatialIndex:               util.NewGSpatialIndex(),
+		npcInstanceSpatialIndex:          util.NewGSpatialIndex(),
+		interactableInstanceSpatialIndex: util.NewGSpatialIndex(),
 	}
 
 	// Initialise spatial indexes

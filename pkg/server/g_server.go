@@ -361,10 +361,6 @@ func (s *GServer) doTick() {
 }
 
 func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {
-	// @todo move to config/const
-	simulateRangeX := config.ClientSimulationRangeX
-	simulateRangeY := config.ClientSimulationRangeX
-
 	npcSet := make(map[string]struct{})
 	interactableSet := make(map[string]struct{})
 
@@ -379,13 +375,16 @@ func (s *GServer) doGameWorldTick(currentClients map[string]*GServerClient) {
 			continue
 		}
 
-		minX := player.Pos.X - simulateRangeX
-		maxX := player.Pos.X + simulateRangeX
-		minY := player.Pos.Y - simulateRangeY
-		maxY := player.Pos.Y + simulateRangeY
-
-		npcRangeSet := s.WorldController.npcSpatialIndex.QueryPosRange(minX, maxX, minY, maxY)
-		interactableRangeSet := s.WorldController.interactableSpatialIndex.QueryPosRange(minX, maxX, minY, maxY)
+		npcRangeSet := s.WorldController.npcSpatialIndex.QueryRange(
+			player.Pos,
+			config.ClientSimulationRangeX,
+			config.ClientSimulationRangeY,
+		)
+		interactableRangeSet := s.WorldController.interactableSpatialIndex.QueryRange(
+			player.Pos,
+			config.ClientSimulationRangeX,
+			config.ClientSimulationRangeY,
+		)
 
 		for npcID := range npcRangeSet {
 			npcSet[npcID] = struct{}{}
