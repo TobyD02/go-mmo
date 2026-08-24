@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tobyd02/go-mmo/pkg/client"
 	"github.com/tobyd02/go-mmo/pkg/config"
+	"github.com/tobyd02/go-mmo/pkg/game"
 )
 
 func main() {
@@ -18,12 +19,17 @@ func main() {
 
 	clientID := uuid.NewString()
 
+	// Make it read only
 	c := client.NewGClient(true)
 
 	log.Printf("Connecting to %s", serverURI)
 
-	// Make it read only
-	world, err := c.Start(serverURI, clientID)
+	initialWorldState, err := game.NewGameWorld("./data/world.txt")
+	if err != nil {
+		log.Fatalf("Failed to load initial world state: %s", err)
+	}
+
+	world, err := c.Start(serverURI, clientID, initialWorldState)
 	if err != nil {
 		log.Fatalf("Failed to start client: %v", err)
 	}

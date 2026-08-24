@@ -31,7 +31,12 @@ type Game struct {
 func NewGame(serverURI, clientID string) (*Game, error) {
 	c := client.NewGClient(false)
 
-	world, err := c.Start(serverURI, clientID)
+	initialWorldState, err := game.NewGameWorld("./data/world.txt")
+	if err != nil {
+		log.Fatalf("Failed to load initial world state: %s", err)
+	}
+
+	world, err := c.Start(serverURI, clientID, initialWorldState)
 	if err != nil {
 		return nil, err
 	}
