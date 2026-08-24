@@ -16,17 +16,25 @@ type GameWorldFile struct {
 	Interactables map[string][]util.Vec2 `json:"interactables"`
 }
 
-func LoadGameWorld(worldFilePath string) (*GameWorld, error) {
+func LoadGameWorldFile(worldFilePath string) (GameWorldFile, error) {
 	data, err := os.ReadFile(worldFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read world file path: %s", err)
+		return GameWorldFile{}, fmt.Errorf("failed to read world file path: %s", err)
 	}
 
 	var gameWorldFile GameWorldFile
 	err = json.Unmarshal(data, &gameWorldFile)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal world file data: %s", err)
+		return GameWorldFile{}, fmt.Errorf("failed to unmarshal world file data: %s", err)
+	}
+	return gameWorldFile, nil
+}
+
+func LoadGameWorld(worldFilePath string) (*GameWorld, error) {
+	gameWorldFile, err := LoadGameWorldFile(worldFilePath)
+	if err != nil {
+		return nil, err
 	}
 
 	height := len(gameWorldFile.Tiles)
