@@ -11,6 +11,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 
 	"github.com/tobyd02/go-mmo/pkg/client"
+	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/game"
 )
 
@@ -31,7 +32,7 @@ type Game struct {
 func NewGame(serverURI, clientID string) (*Game, error) {
 	c := client.NewGClient(false)
 
-	initialWorldState, err := game.NewGameWorld("./data/world.txt")
+	initialWorldState, err := game.NewGameWorld(config.GameWorldFilePath)
 	if err != nil {
 		log.Fatalf("Failed to load initial world state: %s", err)
 	}

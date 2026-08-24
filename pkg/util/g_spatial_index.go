@@ -3,14 +3,14 @@ package util
 import "github.com/tobyd02/go-mmo/pkg/config"
 
 type GSpatialIndex struct {
-	positionIndex map[Vec2]map[string]struct{}
+	PositionIndex map[Vec2]map[string]struct{}
 	chunkIndex    map[Vec2]map[string]struct{}
 	chunkSize     int
 }
 
 func NewGSpatialIndex() GSpatialIndex {
 	return GSpatialIndex{
-		positionIndex: make(map[Vec2]map[string]struct{}),
+		PositionIndex: make(map[Vec2]map[string]struct{}),
 		chunkIndex:    make(map[Vec2]map[string]struct{}),
 		chunkSize:     config.ChunkSize,
 	}
@@ -35,22 +35,22 @@ func floorDiv(value, divisor int) int {
 }
 
 func (s GSpatialIndex) addPositionIndex(id string, pos Vec2) {
-	if s.positionIndex[pos] == nil {
-		s.positionIndex[pos] = make(map[string]struct{})
+	if s.PositionIndex[pos] == nil {
+		s.PositionIndex[pos] = make(map[string]struct{})
 	}
 
-	s.positionIndex[pos][id] = struct{}{}
+	s.PositionIndex[pos][id] = struct{}{}
 }
 
 func (s GSpatialIndex) removePositionIndex(id string, pos Vec2) {
-	if s.positionIndex[pos] == nil {
+	if s.PositionIndex[pos] == nil {
 		return
 	}
 
-	delete(s.positionIndex[pos], id)
+	delete(s.PositionIndex[pos], id)
 
-	if len(s.positionIndex[pos]) == 0 {
-		delete(s.positionIndex, pos)
+	if len(s.PositionIndex[pos]) == 0 {
+		delete(s.PositionIndex, pos)
 	}
 }
 
@@ -111,7 +111,7 @@ func (s GSpatialIndex) Update(id string, oldPos Vec2, newPos Vec2) {
 }
 
 func (s GSpatialIndex) QueryPos(x, y int) map[string]struct{} {
-	return s.positionIndex[Vec2{X: x, Y: y}]
+	return s.PositionIndex[Vec2{X: x, Y: y}]
 }
 
 func (s GSpatialIndex) QueryChunk(x, y int) map[string]struct{} {

@@ -1,7 +1,6 @@
 package game
 
 import (
-	"github.com/google/uuid"
 	"github.com/tobyd02/go-mmo/pkg/util"
 )
 
@@ -25,9 +24,9 @@ type GInteractableInstance struct {
 	OccupantCooldown    int
 }
 
-func NewGInteractableInstance(interactableID string, x, y int) *GInteractableInstance {
+func NewGInteractableInstance(interactableInstanceID string, interactableID string, x, y int) *GInteractableInstance {
 	return &GInteractableInstance{
-		ID:                  uuid.NewString(),
+		ID:                  interactableInstanceID,
 		InteractableID:      interactableID,
 		Pos:                 util.Vec2{X: x, Y: y},
 		CurrentTickCooldown: 0,

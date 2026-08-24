@@ -4,9 +4,6 @@ package game
 import (
 	"fmt"
 	"log"
-	"os"
-	"strconv"
-	"strings"
 
 	"github.com/tobyd02/go-mmo/pkg/util"
 )
@@ -23,66 +20,14 @@ type GameWorld struct {
 }
 
 func NewGameWorld(worldFilePath string) (*GameWorld, error) {
-	data, err := os.ReadFile(worldFilePath)
+	gameWorld, err := LoadGameWorld(worldFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read world file path: %s", err)
+		return nil, fmt.Errorf("Failed to load world %s", err)
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	log.Println("%d, %d", gameWorld.SpawnPoint.X, gameWorld.SpawnPoint.Y)
 
-	height := len(lines)
-	var width int
-
-	spawn := util.Vec2{X: 0, Y: 0}
-
-	gameMap := make([][]GameWorldTile, 0, len(lines))
-	for y, line := range lines {
-		values := strings.Split(strings.TrimSpace(line), ",")
-		row := make([]GameWorldTile, 0, len(values))
-
-		if y == 0 {
-			width = len(values)
-		}
-
-		for x, value := range values {
-			n, err := strconv.Atoi(strings.TrimSpace(value))
-			if err != nil {
-				return nil, err
-			}
-
-			tile := GameWorldTile(n)
-			if tile == TileSpawn {
-				spawn.X = x
-				spawn.Y = y
-			}
-			row = append(row, GameWorldTile(n))
-		}
-
-		gameMap = append(gameMap, row)
-	}
-
-	log.Printf("%d, %d\n", spawn.X, spawn.Y)
-
-	gamePlayers := make(map[string]*GPlayer)
-	gameNpcs := make(map[string]*GNpcInstance)
-	gameInteractables := make(map[string]*GInteractableInstance)
-
-	log.Printf(
-		"World dimensions: Width=%d Height=%d MapRows=%d FirstRowWidth=%d",
-		width,
-		height,
-		len(gameMap),
-		len(gameMap[0]),
-	)
-
-	return &GameWorld{
-		Map:           gameMap,
-		Players:       gamePlayers,
-		Npcs:          gameNpcs,
-		Interactables: gameInteractables,
-		Width:         width, Height: height,
-		SpawnPoint: spawn,
-	}, nil
+	return gameWorld, nil
 }
 
 func (g *GameWorld) Copy() *GameWorld {

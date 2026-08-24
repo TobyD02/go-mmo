@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"log"
-	"math/rand/v2"
 
 	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/game"
@@ -30,7 +29,7 @@ type GWorldController struct {
 }
 
 func NewGWorldController(getTicker func() int, getMessageRouter func() *GMessageRouter) *GWorldController {
-	gameWorld, err := game.NewGameWorld("./data/world.txt")
+	gameWorld, err := game.NewGameWorld(config.GameWorldFilePath)
 	if err != nil {
 		panic(err)
 	}
@@ -54,43 +53,53 @@ func NewGWorldController(getTicker func() int, getMessageRouter func() *GMessage
 }
 
 func (wc *GWorldController) SetupWorld() {
-	npcRegistry, err := game.GetNpcRegistry()
-	if err != nil {
-		log.Fatalf("failed to get npc registry")
+	// npcRegistry, err := game.GetNpcRegistry()
+	// if err != nil {
+	// log.Fatalf("failed to get npc registry")
+	// }
+	//
+	// interactableRegistry, err := game.GetInteractableRegistry()
+	// if err != nil {
+	// log.Fatalf("failed to get npc registry")
+	// }
+	//
+	// log.Println("Starting world generation")
+
+	for _, npcInstance := range wc.GameWorld.Npcs {
+		wc.npcSpatialIndex.Add(npcInstance.ID, npcInstance.Pos)
 	}
 
-	interactableRegistry, err := game.GetInteractableRegistry()
-	if err != nil {
-		log.Fatalf("failed to get npc registry")
+	for _, interactableInstance := range wc.GameWorld.Interactables {
+		wc.interactableSpatialIndex.Add(interactableInstance.ID, interactableInstance.Pos)
 	}
 
-	log.Println("Starting world generation")
+	log.Printf("npc index: %d | interact index: %d", len(wc.npcSpatialIndex.PositionIndex), len(wc.interactableSpatialIndex.PositionIndex))
 
-	for y, row := range wc.GameWorld.Map {
-		for x, tile := range row {
-
-			if tile == game.TileWall {
-				continue
-			}
-
-			if x != wc.GameWorld.SpawnPoint.X && y != wc.GameWorld.SpawnPoint.Y {
-				randInt := rand.IntN(100)
-				if randInt == 1 {
-					interactableID, err := util.GetRandomIDFromRegistry(interactableRegistry)
-					if err != nil {
-						continue
-					}
-					wc.AddInteractableInstance(game.NewGInteractableInstance(interactableID, x, y))
-				} else if randInt == 2 {
-					npcID, err := util.GetRandomIDFromRegistry(npcRegistry)
-					if err != nil {
-						continue
-					}
-					wc.AddNpcInstance(game.NewGNpcInstance(npcID, x, y))
-				}
-			}
-		}
-	}
+	// // for y, row := range wc.GameWorld.Map {
+	// for x, tile := range row {
+	//
+	// if tile == game.TileWall {
+	// continue
+	// }
+	//
+	// if x != wc.GameWorld.SpawnPoint.X && y != wc.GameWorld.SpawnPoint.Y {
+	// randInt := rand.IntN(100)
+	// if randInt == 1 {
+	// interactableID, err := util.GetRandomIDFromRegistry(interactableRegistry)
+	// if err != nil {
+	// continue
+	// }
+	// wc.AddInteractableInstance(game.NewGInteractableInstance(interactableID, x, y))
+	// } else if randInt == 2 {
+	// npcID, err := util.GetRandomIDFromRegistry(npcRegistry)
+	// if err != nil {
+	// continue
+	// }
+	// wc.AddNpcInstance(game.NewGNpcInstance(npcID, x, y))
+	// }
+	// }
+	// }
+	// }
 
 }
 

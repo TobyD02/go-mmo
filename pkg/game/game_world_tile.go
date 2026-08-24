@@ -2,6 +2,8 @@ package game
 
 type GameWorldTile int
 
+const GameWorldTileCount int = 3
+
 const (
 	TileFloor GameWorldTile = iota
 	TileWall

@@ -28,3 +28,6 @@ const SpawnProtectionRadiusSquared = SpawnProtectionRadius * SpawnProtectionRadi
 
 // Chunking
 const ChunkSize = 32
+
+// Game World File
+const GameWorldFilePath = "./data/world_new.json"

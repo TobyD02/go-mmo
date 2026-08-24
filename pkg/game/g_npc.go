@@ -3,7 +3,6 @@ package game
 import (
 	"math/rand/v2"
 
-	"github.com/google/uuid"
 	"github.com/tobyd02/go-mmo/pkg/util"
 )
 
@@ -32,9 +31,9 @@ type GNpcInstance struct {
 	NpcTargetID    string `json:"npc_target_id"`    // player should take priority
 }
 
-func NewGNpcInstance(npcID string, x, y int) *GNpcInstance {
+func NewGNpcInstance(npcInstanceID string, npcID string, x, y int) *GNpcInstance {
 	return &GNpcInstance{
-		ID:      uuid.NewString(),
+		ID:      npcInstanceID,
 		NpcID:   npcID,
 		Pos:     util.Vec2{X: x, Y: y},
 		LastPos: util.Vec2{X: x, Y: y},
@@ -184,11 +183,19 @@ func (n *GNpcInstance) TakePlayerDamage(player *GPlayer) int {
 func (n *GNpcInstance) CanDoCombat(currentServerTick int) bool {
 	npc := GetNpcFromRegistry(n.NpcID)
 
+	if npc == nil {
+		return false
+	}
+
 	return n.HasTarget() && currentServerTick-n.LastTickUpdated >= npc.CombatSpeed
 }
 
 func (n *GNpcInstance) CanDoPatrol(currentServerTick int) bool {
 	npc := GetNpcFromRegistry(n.NpcID)
+
+	if npc == nil {
+		return false
+	}
 
 	return !n.HasTarget() && currentServerTick-n.LastTickUpdated >= npc.PatrolSpeed
 }

@@ -2,10 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>Game Map Editor</title>
+    <title>Game World Generator</title>
 
     <style>
       * {
@@ -14,58 +13,62 @@
 
       body {
         margin: 0;
-        padding: 20px;
-
-        font-family: monospace;
-
-        background: #1a1a1a;
-        color: white;
+        font-family: Arial, sans-serif;
+        background: #1e1e1e;
+        color: #eeeeee;
+        overflow: hidden;
       }
 
-      h1 {
-        margin-top: 0;
-      }
-
-      .controls {
+      #app {
         display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
+        height: 100vh;
+      }
 
-        align-items: center;
+      #sidebar {
+        width: 300px;
+        min-width: 300px;
+        background: #292929;
+        padding: 16px;
+        overflow-y: auto;
+        border-right: 1px solid #444;
+      }
 
-        padding: 15px;
-        margin-bottom: 15px;
+      #sidebar h1 {
+        margin-top: 0;
+        font-size: 20px;
+      }
 
-        background: #252525;
-        border: 1px solid #444;
+      .section {
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #444;
+      }
+
+      .section:last-child {
+        border-bottom: none;
       }
 
       label {
-        display: flex;
-        align-items: center;
-        gap: 6px;
+        display: block;
+        margin-bottom: 6px;
+        font-size: 13px;
+        color: #cccccc;
       }
 
-      input {
-        width: 70px;
-
-        padding: 6px;
-
-        background: #111;
+      input,
+      select,
+      button {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 8px;
+        background: #333;
         color: white;
-
         border: 1px solid #555;
+        border-radius: 4px;
       }
 
       button {
-        padding: 8px 14px;
-
         cursor: pointer;
-
-        background: #333;
-        color: white;
-
-        border: 1px solid #666;
       }
 
       button:hover {
@@ -74,221 +77,366 @@
 
       button.active {
         background: #666;
-        border-color: white;
+        border-color: #999;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .row > * {
+        flex: 1;
       }
 
       #canvas-container {
-        width: 100%;
-        height: 75vh;
-
+        flex: 1;
         overflow: auto;
-
-        border: 1px solid #555;
-
-        background: #111;
+        background: #151515;
+        position: relative;
       }
 
       canvas {
         display: block;
-
         cursor: crosshair;
-
         image-rendering: pixelated;
       }
 
-      .info {
-        margin-top: 15px;
+      .layer-button {
+        text-align: left;
+      }
+
+      .tool-button {
+        text-align: left;
+      }
+
+      #info {
+        font-size: 12px;
         color: #aaa;
+        line-height: 1.5;
       }
     </style>
   </head>
 
   <body>
-    <h1>Game Map Editor</h1>
+    <div id="app">
+      <div id="sidebar">
+        <h1>Game World Generator</h1>
 
-    <div class="controls">
-      <label>
-        Map Width
-        <input id="width" type="number" value="88" min="1" />
-      </label>
+        <div class="section">
+          <label>World Width</label>
+          <input id="worldWidth" type="number" min="1" value="64" />
 
-      <label>
-        Map Height
-        <input id="height" type="number" value="52" min="1" />
-      </label>
+          <label>World Height</label>
+          <input id="worldHeight" type="number" min="1" value="32" />
 
-      <button id="resizeButton">Create / Resize</button>
+          <button id="createWorldButton">Create / Resize World</button>
+        </div>
 
-      <label>
-        Zoom
-        <input id="zoom" type="number" value="12" min="2" max="100" />
-      </label>
+        <div class="section">
+          <label>Active Layer</label>
 
-      <label>
-        Brush
-        <input id="brushSize" type="number" value="1" min="1" max="50" />
-      </label>
+          <button id="tileLayerButton" class="layer-button active">
+            Tiles
+          </button>
 
-      <button id="brushButton" class="active">Brush</button>
+          <button id="entityLayerButton" class="layer-button">Entities</button>
+        </div>
 
-      <button id="fillToolButton">Fill Tool</button>
+        <div class="section">
+          <label>Tool</label>
 
-      <button id="clearButton">Clear</button>
+          <button id="brushToolButton" class="tool-button active">Brush</button>
 
-      <button id="fillAllButton">Fill All</button>
+          <button id="fillToolButton" class="tool-button">Fill</button>
 
-      <button id="saveButton">Save .txt</button>
-    </div>
+          <button id="eraserToolButton" class="tool-button">Eraser</button>
+        </div>
 
-    <div id="canvas-container">
-      <canvas id="canvas"></canvas>
-    </div>
+        <div class="section">
+          <label>Brush Size</label>
 
-    <div class="info">
-      <div>Left click: paint</div>
+          <input id="brushSize" type="number" min="1" max="64" value="1" />
+        </div>
 
-      <div>Right click or Shift + click: erase</div>
+        <div class="section">
+          <label>Zoom / Tile Size</label>
 
-      <div>Mouse wheel: zoom</div>
+          <input id="tileSize" type="number" min="2" max="100" value="20" />
+        </div>
 
-      <div>Brush size paints multiple tiles</div>
+        <div class="section">
+          <label>Tile Type</label>
 
-      <div>Fill tool flood-fills connected tiles</div>
+          <select id="tileType">
+            <option value="0">Floor (0)</option>
+            <option value="1">Wall (1)</option>
+          </select>
+        </div>
+
+        <div class="section">
+          <label>Entity Type</label>
+
+          <select id="entityType">
+            <option value="0">Empty (0)</option>
+          </select>
+
+          <div id="info">
+            More NPC/interactable types can be added later once you have your
+            generated tile map type lookup.
+          </div>
+        </div>
+
+        <div class="section">
+          <button id="exportButton">Export world.json</button>
+
+          <button id="importButton">Import world.json</button>
+
+          <input
+            id="fileInput"
+            type="file"
+            accept=".json"
+            style="display: none"
+          />
+        </div>
+
+        <div class="section">
+          <div id="info">
+            <strong>Current format:</strong>
+
+            <br /><br />
+
+            Tiles layer:
+            <br />
+            0 = Floor
+            <br />
+            1 = Wall
+            <br />
+            2 = Spawn
+            <br />
+
+            Entity layer:
+            <br />
+            0 = Empty
+          </div>
+        </div>
+      </div>
+
+      <div id="canvas-container">
+        <canvas id="worldCanvas"></canvas>
+      </div>
     </div>
 
     <script>
-      const canvas = document.getElementById("canvas");
-
+      const canvas = document.getElementById("worldCanvas");
       const ctx = canvas.getContext("2d");
 
-      const widthInput = document.getElementById("width");
+      const canvasContainer = document.getElementById("canvas-container");
 
-      const heightInput = document.getElementById("height");
+      const worldWidthInput = document.getElementById("worldWidth");
 
-      const zoomInput = document.getElementById("zoom");
+      const worldHeightInput = document.getElementById("worldHeight");
 
       const brushSizeInput = document.getElementById("brushSize");
 
-      const resizeButton = document.getElementById("resizeButton");
+      const tileSizeInput = document.getElementById("tileSize");
 
-      const brushButton = document.getElementById("brushButton");
+      const tileTypeSelect = document.getElementById("tileType");
+
+      const entityTypeSelect = document.getElementById("entityType");
+
+      const tileLayerButton = document.getElementById("tileLayerButton");
+
+      const entityLayerButton = document.getElementById("entityLayerButton");
+
+      const brushToolButton = document.getElementById("brushToolButton");
 
       const fillToolButton = document.getElementById("fillToolButton");
 
-      const clearButton = document.getElementById("clearButton");
+      const eraserToolButton = document.getElementById("eraserToolButton");
 
-      const fillAllButton = document.getElementById("fillAllButton");
+      const createWorldButton = document.getElementById("createWorldButton");
 
-      const saveButton = document.getElementById("saveButton");
+      const exportButton = document.getElementById("exportButton");
 
-      let mapWidth = 88;
-      let mapHeight = 52;
+      const importButton = document.getElementById("importButton");
 
-      let zoom = 12;
+      const fileInput = document.getElementById("fileInput");
 
-      let brushSize = 1;
+      let world = {
+        tiles: [],
+        entities: [],
+      };
 
-      let grid = [];
+      let activeLayer = "tiles";
 
-      let isDrawing = false;
+      let activeTool = "brush";
 
-      let drawValue = 1;
+      let mouseDown = false;
 
-      /*
-|--------------------------------------------------------------------------
-| Current Tool
-|--------------------------------------------------------------------------
-*/
+      function create2DArray(width, height, defaultValue) {
+        const array = [];
 
-      let currentTool = "brush";
+        for (let y = 0; y < height; y++) {
+          const row = [];
 
-      /*
-|--------------------------------------------------------------------------
-| Create Grid
-|--------------------------------------------------------------------------
-*/
+          for (let x = 0; x < width; x++) {
+            row.push(defaultValue);
+          }
 
-      function createGrid() {
-        mapWidth = parseInt(widthInput.value);
+          array.push(row);
+        }
 
-        mapHeight = parseInt(heightInput.value);
-
-        grid = Array.from({ length: mapHeight }, () => Array(mapWidth).fill(0));
-
-        resizeCanvas();
+        return array;
       }
 
-      /*
-|--------------------------------------------------------------------------
-| Resize Canvas
-|--------------------------------------------------------------------------
-*/
+      function createWorld() {
+        const width = Math.max(1, parseInt(worldWidthInput.value));
+
+        const height = Math.max(1, parseInt(worldHeightInput.value));
+
+        world = {
+          tiles: create2DArray(width, height, 0),
+
+          entities: create2DArray(width, height, 0),
+        };
+
+        render();
+      }
+
+      function getWorldWidth() {
+        if (world.tiles.length === 0) {
+          return 0;
+        }
+
+        return world.tiles[0].length;
+      }
+
+      function getWorldHeight() {
+        return world.tiles.length;
+      }
+
+      function getTileSize() {
+        return Math.max(2, parseInt(tileSizeInput.value));
+      }
 
       function resizeCanvas() {
-        zoom = parseInt(zoomInput.value);
+        const tileSize = getTileSize();
 
-        canvas.width = mapWidth * zoom;
+        canvas.width = getWorldWidth() * tileSize;
 
-        canvas.height = mapHeight * zoom;
-
-        draw();
+        canvas.height = getWorldHeight() * tileSize;
       }
 
-      /*
-|--------------------------------------------------------------------------
-| Draw World
-|--------------------------------------------------------------------------
-*/
+      function getActiveLayerData() {
+        return world[activeLayer];
+      }
 
-      function draw() {
+      function render() {
+        resizeCanvas();
+
+        const tileSize = getTileSize();
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        for (let y = 0; y < mapHeight; y++) {
-          for (let x = 0; x < mapWidth; x++) {
-            const pixelX = x * zoom;
-
-            const pixelY = y * zoom;
+        for (let y = 0; y < getWorldHeight(); y++) {
+          for (let x = 0; x < getWorldWidth(); x++) {
+            const tile = world.tiles[y][x];
 
             /*
-             * Filled tile
-             */
+                TILE LAYER
 
-            if (grid[y][x] === 1) {
-              ctx.fillStyle = "#ffffff";
+                0 = Floor
+                1 = Wall
+            */
 
-              ctx.fillRect(pixelX, pixelY, zoom, zoom);
+            if (tile === 0) {
+              ctx.fillStyle = "#555";
+            } else if (tile === 1) {
+              ctx.fillStyle = "#222";
+            } else {
+              ctx.fillStyle = "#ff00ff";
+            }
+
+            ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+
+            /*
+                ENTITY LAYER
+
+                Currently:
+
+                0 = Empty
+
+                Later you can add:
+
+                3 = Goblin
+                4 = Rat
+                5 = Chest
+                etc.
+            */
+
+            const entity = world.entities[y][x];
+
+            if (entity !== 0) {
+              ctx.fillStyle = "#ffcc00";
+
+              const padding = Math.max(2, tileSize * 0.2);
+
+              ctx.fillRect(
+                x * tileSize + padding,
+                y * tileSize + padding,
+                tileSize - padding * 2,
+                tileSize - padding * 2,
+              );
+
+              ctx.fillStyle = "black";
+
+              ctx.font = `${Math.max(8, tileSize * 0.4)}px Arial`;
+
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+
+              ctx.fillText(
+                entity,
+                x * tileSize + tileSize / 2,
+                y * tileSize + tileSize / 2,
+              );
             }
 
             /*
-             * Grid
-             *
-             * Don't draw grid if
-             * zoom is extremely small.
-             */
+                GRID
+            */
 
-            if (zoom >= 4) {
-              ctx.strokeStyle = "#555";
+            ctx.strokeStyle = "#777";
+            ctx.lineWidth = 1;
 
-              ctx.lineWidth = 1;
-
-              ctx.strokeRect(pixelX + 0.5, pixelY + 0.5, zoom, zoom);
-            }
+            ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
           }
+        }
+
+        /*
+        Highlight active layer slightly.
+    */
+
+        if (activeLayer === "entities") {
+          ctx.fillStyle = "rgba(255, 255, 0, 0.04)";
+
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
       }
 
-      /*
-|--------------------------------------------------------------------------
-| Get Tile Position
-|--------------------------------------------------------------------------
-*/
-
-      function getTilePosition(event) {
+      function getCanvasTile(event) {
         const rect = canvas.getBoundingClientRect();
 
-        const x = Math.floor((event.clientX - rect.left) / zoom);
+        const tileSize = getTileSize();
 
-        const y = Math.floor((event.clientY - rect.top) / zoom);
+        const mouseX = event.clientX - rect.left;
+
+        const mouseY = event.clientY - rect.top;
+
+        const x = Math.floor(mouseX / tileSize);
+
+        const y = Math.floor(mouseY / tileSize);
 
         return {
           x,
@@ -296,152 +444,114 @@
         };
       }
 
-      /*
-|--------------------------------------------------------------------------
-| Paint Brush
-|--------------------------------------------------------------------------
-*/
+      function isValidPosition(x, y) {
+        return x >= 0 && y >= 0 && x < getWorldWidth() && y < getWorldHeight();
+      }
 
-      function paintBrush(centerX, centerY, value) {
-        brushSize = parseInt(brushSizeInput.value);
+      function getBrushValue() {
+        if (activeTool === "eraser") {
+          return 0;
+        }
 
-        const half = Math.floor(brushSize / 2);
+        if (activeLayer === "tiles") {
+          return parseInt(tileTypeSelect.value);
+        }
 
-        /*
-         * Square brush.
-         */
+        return parseInt(entityTypeSelect.value);
+      }
 
-        for (let y = centerY - half; y <= centerY + half; y++) {
-          for (let x = centerX - half; x <= centerX + half; x++) {
-            if (x < 0 || x >= mapWidth || y < 0 || y >= mapHeight) {
+      function paintBrush(centerX, centerY) {
+        const brushSize = Math.max(1, parseInt(brushSizeInput.value));
+
+        const layer = getActiveLayerData();
+
+        const value = getBrushValue();
+
+        const startOffset = Math.floor(brushSize / 2);
+
+        for (let y = 0; y < brushSize; y++) {
+          for (let x = 0; x < brushSize; x++) {
+            const worldX = centerX + x - startOffset;
+
+            const worldY = centerY + y - startOffset;
+
+            if (!isValidPosition(worldX, worldY)) {
               continue;
             }
 
-            grid[y][x] = value;
+            layer[worldY][worldX] = value;
           }
         }
+
+        render();
       }
 
-      /*
-|--------------------------------------------------------------------------
-| Flood Fill
-|--------------------------------------------------------------------------
-*/
-
-      function floodFill(startX, startY, newValue) {
-        if (
-          startX < 0 ||
-          startX >= mapWidth ||
-          startY < 0 ||
-          startY >= mapHeight
-        ) {
+      function floodFill(startX, startY, replacementValue) {
+        if (!isValidPosition(startX, startY)) {
           return;
         }
 
-        const targetValue = grid[startY][startX];
+        const layer = getActiveLayerData();
 
-        /*
-         * Nothing to change.
-         */
+        const targetValue = layer[startY][startX];
 
-        if (targetValue === newValue) {
+        if (targetValue === replacementValue) {
           return;
         }
 
-        const stack = [
-          {
-            x: startX,
-            y: startY,
-          },
-        ];
+        const stack = [[startX, startY]];
 
         while (stack.length > 0) {
-          const position = stack.pop();
+          const [x, y] = stack.pop();
 
-          const x = position.x;
-
-          const y = position.y;
-
-          /*
-           * Outside world.
-           */
-
-          if (x < 0 || x >= mapWidth || y < 0 || y >= mapHeight) {
+          if (!isValidPosition(x, y)) {
             continue;
           }
 
-          /*
-           * Different tile.
-           */
-
-          if (grid[y][x] !== targetValue) {
+          if (layer[y][x] !== targetValue) {
             continue;
           }
 
-          grid[y][x] = newValue;
+          layer[y][x] = replacementValue;
 
-          stack.push(
-            { x: x + 1, y },
-            { x: x - 1, y },
-            { x, y: y + 1 },
-            { x, y: y - 1 },
-          );
+          stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
         }
-      }
 
-      /*
-|--------------------------------------------------------------------------
-| Apply Tool
-|--------------------------------------------------------------------------
-*/
+        render();
+      }
 
       function applyTool(event) {
-        const { x, y } = getTilePosition(event);
+        const { x, y } = getCanvasTile(event);
 
-        if (currentTool === "fill") {
-          floodFill(x, y, drawValue);
-        } else {
-          paintBrush(x, y, drawValue);
+        if (!isValidPosition(x, y)) {
+          return;
         }
 
-        draw();
+        if (activeTool === "fill") {
+          floodFill(x, y, getBrushValue());
+
+          return;
+        }
+
+        paintBrush(x, y);
       }
 
       /*
-|--------------------------------------------------------------------------
-| Mouse Controls
-|--------------------------------------------------------------------------
+    MOUSE EVENTS
 */
 
-      canvas.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-      });
-
       canvas.addEventListener("mousedown", (event) => {
-        event.preventDefault();
-
-        isDrawing = true;
-
-        if (event.button === 2 || event.shiftKey) {
-          drawValue = 0;
-        } else {
-          drawValue = 1;
-        }
+        mouseDown = true;
 
         applyTool(event);
       });
 
       canvas.addEventListener("mousemove", (event) => {
-        if (!isDrawing) {
+        if (!mouseDown) {
           return;
         }
 
-        /*
-         * Flood fill should
-         * only happen once.
-         */
-
-        if (currentTool === "fill") {
+        if (activeTool === "fill") {
           return;
         }
 
@@ -449,136 +559,92 @@
       });
 
       window.addEventListener("mouseup", () => {
-        isDrawing = false;
+        mouseDown = false;
       });
 
       /*
-|--------------------------------------------------------------------------
-| Zoom With Mouse Wheel
-|--------------------------------------------------------------------------
+    LAYER SELECTION
 */
 
-      canvas.addEventListener(
-        "wheel",
-        (event) => {
-          event.preventDefault();
+      tileLayerButton.addEventListener("click", () => {
+        activeLayer = "tiles";
 
-          if (event.deltaY < 0) {
-            zoom = Math.min(zoom + 1, 100);
-          } else {
-            zoom = Math.max(zoom - 1, 2);
-          }
+        tileLayerButton.classList.add("active");
 
-          zoomInput.value = zoom;
+        entityLayerButton.classList.remove("active");
 
-          resizeCanvas();
-        },
-        {
-          passive: false,
-        },
-      );
+        render();
+      });
+
+      entityLayerButton.addEventListener("click", () => {
+        activeLayer = "entities";
+
+        entityLayerButton.classList.add("active");
+
+        tileLayerButton.classList.remove("active");
+
+        render();
+      });
 
       /*
-|--------------------------------------------------------------------------
-| Tool Buttons
-|--------------------------------------------------------------------------
+    TOOL SELECTION
 */
 
-      brushButton.addEventListener("click", () => {
-        currentTool = "brush";
+      function setActiveTool(tool) {
+        activeTool = tool;
 
-        brushButton.classList.add("active");
+        brushToolButton.classList.remove("active");
 
         fillToolButton.classList.remove("active");
+
+        eraserToolButton.classList.remove("active");
+
+        if (tool === "brush") {
+          brushToolButton.classList.add("active");
+        }
+
+        if (tool === "fill") {
+          fillToolButton.classList.add("active");
+        }
+
+        if (tool === "eraser") {
+          eraserToolButton.classList.add("active");
+        }
+      }
+
+      brushToolButton.addEventListener("click", () => {
+        setActiveTool("brush");
       });
 
       fillToolButton.addEventListener("click", () => {
-        currentTool = "fill";
+        setActiveTool("fill");
+      });
 
-        fillToolButton.classList.add("active");
-
-        brushButton.classList.remove("active");
+      eraserToolButton.addEventListener("click", () => {
+        setActiveTool("eraser");
       });
 
       /*
-|--------------------------------------------------------------------------
-| Zoom Input
-|--------------------------------------------------------------------------
+    WORLD CREATION
 */
 
-      zoomInput.addEventListener("change", () => {
-        resizeCanvas();
-      });
+      createWorldButton.addEventListener("click", createWorld);
 
       /*
-|--------------------------------------------------------------------------
-| Resize Map
-|--------------------------------------------------------------------------
+    ZOOM
 */
 
-      resizeButton.addEventListener("click", () => {
-        const confirmed = confirm(
-          "Resizing will clear the current map. Continue?",
-        );
-
-        if (!confirmed) {
-          return;
-        }
-
-        createGrid();
-      });
+      tileSizeInput.addEventListener("input", render);
 
       /*
-|--------------------------------------------------------------------------
-| Clear Map
-|--------------------------------------------------------------------------
+    EXPORT
 */
 
-      clearButton.addEventListener("click", () => {
-        for (let y = 0; y < mapHeight; y++) {
-          grid[y].fill(0);
-        }
+      exportButton.addEventListener("click", () => {
+        const json = JSON.stringify(world, null, 2);
 
-        draw();
-      });
-
-      /*
-|--------------------------------------------------------------------------
-| Fill Entire Map
-|--------------------------------------------------------------------------
-*/
-
-      fillAllButton.addEventListener("click", () => {
-        for (let y = 0; y < mapHeight; y++) {
-          grid[y].fill(1);
-        }
-
-        draw();
-      });
-
-      /*
-|--------------------------------------------------------------------------
-| Save TXT
-|--------------------------------------------------------------------------
-*/
-
-      saveButton.addEventListener("click", () => {
-        let output = "";
-
-        for (let y = 0; y < mapHeight; y++) {
-          output += grid[y].join(",");
-
-          /*
-           * Every row,
-           * including the last,
-           * ends with newline.
-           */
-
-          output += "\n";
-        }
-
-        const blob = new Blob([output], {
-          type: "text/plain",
+        const blob = new Blob([json], {
+          type: "application/json",
         });
 
         const url = URL.createObjectURL(blob);
@@ -587,24 +653,91 @@
 
         link.href = url;
 
-        link.download = "world.txt";
+        link.download = "world.json";
 
         document.body.appendChild(link);
 
         link.click();
 
-        link.remove();
+        document.body.removeChild(link);
 
         URL.revokeObjectURL(url);
       });
 
       /*
-|--------------------------------------------------------------------------
-| Initial World
-|--------------------------------------------------------------------------
+    IMPORT
 */
 
-      createGrid();
+      importButton.addEventListener("click", () => {
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", (event) => {
+        const file = event.target.files[0];
+
+        if (!file) {
+          return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = (loadEvent) => {
+          try {
+            const parsed = JSON.parse(loadEvent.target.result);
+
+            if (!parsed.tiles || !parsed.entities) {
+              throw new Error("Invalid world file");
+            }
+
+            if (
+              !Array.isArray(parsed.tiles) ||
+              !Array.isArray(parsed.entities)
+            ) {
+              throw new Error("World layers must be arrays");
+            }
+
+            if (parsed.tiles.length !== parsed.entities.length) {
+              throw new Error("Tiles and entities have different heights");
+            }
+
+            for (let y = 0; y < parsed.tiles.length; y++) {
+              if (!Array.isArray(parsed.tiles[y])) {
+                throw new Error("Invalid tiles row");
+              }
+
+              if (!Array.isArray(parsed.entities[y])) {
+                throw new Error("Invalid entities row");
+              }
+
+              if (parsed.tiles[y].length !== parsed.entities[y].length) {
+                throw new Error("Tiles and entities have different widths");
+              }
+            }
+
+            world = {
+              tiles: parsed.tiles,
+
+              entities: parsed.entities,
+            };
+
+            worldWidthInput.value = getWorldWidth();
+
+            worldHeightInput.value = getWorldHeight();
+
+            render();
+          } catch (error) {
+            alert("Failed to import world:\n\n" + error.message);
+          }
+        };
+
+        reader.readAsText(file);
+      });
+
+      /*
+    INITIAL WORLD
+*/
+
+      createWorld();
     </script>
   </body>
 </html>

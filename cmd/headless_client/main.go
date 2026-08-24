@@ -24,7 +24,7 @@ func main() {
 
 	log.Printf("Connecting to %s", serverURI)
 
-	initialWorldState, err := game.NewGameWorld("./data/world.txt")
+	initialWorldState, err := game.NewGameWorld(config.GameWorldFilePath)
 	if err != nil {
 		log.Fatalf("Failed to load initial world state: %s", err)
 	}
