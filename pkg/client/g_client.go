@@ -50,7 +50,7 @@ func (c *GClient) connectToServer(serverURI string) error {
 	return c.conn.Connect(uri)
 }
 
-func (c *GClient) Start(serverURI string, clientID string) (*game.GameWorld, error) {
+func (c *GClient) Start(serverURI string, clientID string, initialWorldState *game.GameWorld) (*game.GameWorld, error) {
 	err := c.connectToServer(serverURI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %s", err)
@@ -93,7 +93,9 @@ func (c *GClient) Start(serverURI string, clientID string) (*game.GameWorld, err
 		go c.WriteLoop()
 	}
 
-	return parsedData.InitialWorldState, nil
+	initialWorldState.ApplyDiff(parsedData.InitialWorldStateDiff)
+
+	return initialWorldState, nil
 }
 
 func (c *GClient) WriteLoop() {

@@ -11,7 +11,10 @@ import (
 )
 
 type GWorldController struct {
-	GameWorld        *game.GameWorld
+	GameWorld *game.GameWorld
+
+	InitialGameWorldState *game.GameWorld
+
 	getServerTick    func() int
 	getMessageRouter func() *GMessageRouter
 
@@ -26,14 +29,16 @@ type GWorldController struct {
 	// @todo - at the moment interactables cannot move, however if they ever do then the spatial index will need updating
 }
 
-func NewGWorldController(worldWidth, worldHeight int, getTicker func() int, getMessageRouter func() *GMessageRouter) *GWorldController {
+func NewGWorldController(getTicker func() int, getMessageRouter func() *GMessageRouter) *GWorldController {
 	gameWorld, err := game.NewGameWorld("./data/world.txt")
 	if err != nil {
 		panic(err)
 	}
 
 	return &GWorldController{
-		GameWorld:        gameWorld,
+		GameWorld:             gameWorld,
+		InitialGameWorldState: gameWorld.Copy(),
+
 		getServerTick:    getTicker,
 		getMessageRouter: getMessageRouter,
 

@@ -54,7 +54,7 @@ type GServer struct {
 	MessageRouter *GMessageRouter
 }
 
-func NewGServer(tickSpeed time.Duration, worldWidth int, worldHeight int) *GServer {
+func NewGServer(tickSpeed time.Duration) *GServer {
 	server := &GServer{
 		Clients:         make(map[string]*GServerClient),
 		ClientsReadOnly: make(map[string]*GServerClient),
@@ -80,8 +80,6 @@ func NewGServer(tickSpeed time.Duration, worldWidth int, worldHeight int) *GServ
 	}
 
 	worldController := NewGWorldController(
-		worldWidth,
-		worldHeight,
 		func() int {
 			return server.tick
 		},
@@ -217,6 +215,8 @@ func (s *GServer) removeClientReadOnly(client *GServerClient) {
 
 func (s *GServer) sendInitialWorldState(client *GServerClient, initialWorldStateMessage []byte) {
 	// Send the inital message
+
+	log.Printf("Size of initial world state message: %d kb", len(initialWorldStateMessage)/1000)
 	client.WriteMessage(initialWorldStateMessage)
 }
 
@@ -508,12 +508,15 @@ func (s *GServer) startInitialWorldStateBuilding() {
 
 	s.initialWorldStateBuilding = true
 
-	initialWorldState := s.WorldController.GameWorld.Copy()
+	currentWorldState := s.WorldController.GameWorld.Copy()
 
 	go func(initialWorldState *game.GameWorld) {
 
 		// First message is world state
-		serverInitialWorldStateMessage, err := messages.NewGServerInitialWorldStateMessage(initialWorldState)
+		// Shouldn't matter that we are reading direct from world controller, since initial game world state will never change
+		serverInitialWorldStateMessage, err := messages.NewGServerInitialWorldStateMessage(
+			currentWorldState, s.WorldController.InitialGameWorldState,
+		)
 		if err != nil {
 			s.initialWorldStateResult <- InitialWorldStateResult{
 				Payload: nil,
@@ -537,5 +540,5 @@ func (s *GServer) startInitialWorldStateBuilding() {
 			Payload: worldState,
 			Err:     nil,
 		}
-	}(initialWorldState)
+	}(currentWorldState)
 }

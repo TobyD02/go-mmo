@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tobyd02/go-mmo/pkg/bbt_client"
 	"github.com/tobyd02/go-mmo/pkg/client"
+	"github.com/tobyd02/go-mmo/pkg/game"
 )
 
 func main() {
@@ -18,7 +19,13 @@ func main() {
 
 	clientID := uuid.NewString()
 	gClient := client.NewGClient(false)
-	worldState, err := gClient.Start(serverURI, clientID)
+	initialWorldState, err := game.NewGameWorld("./data/world.txt")
+
+	if err != nil {
+		log.Fatalf("Failed to load initial world state: %s", err)
+	}
+
+	worldState, err := gClient.Start(serverURI, clientID, initialWorldState)
 
 	if err != nil {
 		log.Fatal(err)
