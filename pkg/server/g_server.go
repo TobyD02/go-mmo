@@ -526,6 +526,7 @@ func (s *GServer) handleMessages(
 			moveData, err := messages.ParseGClientMoveMessageData(message.Data)
 			if err != nil {
 				log.Printf("error: failed to parse move data")
+				continue
 			}
 
 			s.WorldController.MovePlayer(client, moveData.Dx, moveData.Dy)
@@ -534,6 +535,7 @@ func (s *GServer) handleMessages(
 			interactData, err := messages.ParseGClientInteractMessageData(message.Data)
 			if err != nil {
 				log.Printf("error: failed to parse interact data")
+				continue
 			}
 
 			s.WorldController.InteractWith(client, interactData.InteractableInstanceID)
@@ -541,9 +543,12 @@ func (s *GServer) handleMessages(
 			attackNpcData, err := messages.ParseGClientAttackNpcMessageData(message.Data)
 			if err != nil {
 				log.Printf("error: failed to parse attack npc data")
+				continue
 			}
 
 			s.WorldController.AttackNpc(client, attackNpcData.NpcInstanceID)
+		default:
+
 		}
 
 	}
