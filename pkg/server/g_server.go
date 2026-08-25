@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/tobyd02/go-mmo/pkg/config"
+	"github.com/tobyd02/go-mmo/pkg/database"
 	"github.com/tobyd02/go-mmo/pkg/game"
 	"github.com/tobyd02/go-mmo/pkg/messages"
 )
@@ -52,9 +53,20 @@ type GServer struct {
 	tick      int
 
 	MessageRouter *GMessageRouter
+
+	serverDB *GServerDB
 }
 
-func NewGServer(tickSpeed time.Duration) *GServer {
+func NewGServer(tickSpeed time.Duration) (*GServer, error) {
+
+	db := database.NewDBSqlite()
+
+	serverDB := NewGServerDB(db)
+	err := serverDB.Init()
+	if err != nil {
+		return nil, err
+	}
+
 	server := &GServer{
 		Clients:         make(map[string]*GServerClient),
 		ClientsReadOnly: make(map[string]*GServerClient),
@@ -77,6 +89,8 @@ func NewGServer(tickSpeed time.Duration) *GServer {
 		tick:          0,
 		TickSpeed:     tickSpeed,
 		MessageRouter: NewGMessageRouter(),
+
+		serverDB: serverDB,
 	}
 
 	worldController := NewGWorldController(
@@ -90,7 +104,7 @@ func NewGServer(tickSpeed time.Duration) *GServer {
 	worldController.SetupWorld()
 
 	server.WorldController = worldController
-	return server
+	return server, nil
 }
 
 func (s *GServer) HandleClientConnection(w http.ResponseWriter, r *http.Request) {
@@ -436,9 +450,35 @@ func (s *GServer) handleClientConnectionsAndDisconnections() {
 		// Handle new connections
 		for _, client := range connections {
 
-			if err := s.WorldController.SpawnNewPlayer(client.ID); err != nil {
+			// Try to read player from DB
+			playerExists, err := s.serverDB.PlayerExists(client.ID)
+			log.Println("Player doesnt exist: ", client.ID)
+			if err != nil {
+				log.Printf("Failed to check if player exists %s: %s", client.ID, err)
 				client.Close()
 				continue
+			}
+
+			if playerExists {
+				player, err := s.serverDB.LoadPlayer(client.ID)
+				if err != nil {
+					log.Printf("Failed to load player %s: %s", client.ID, err)
+					client.Close()
+					continue
+				}
+
+				if err := s.WorldController.SpawnExistingPlayer(client.ID, player); err != nil {
+					log.Printf("Failed to spawn existing player %s: %s", client.ID, err)
+					client.Close()
+					continue
+				}
+
+				log.Println("Spawned existing player")
+			} else {
+				if err := s.WorldController.SpawnNewPlayer(client.ID); err != nil {
+					client.Close()
+					continue
+				}
 			}
 
 			s.pendingClients[client.ID] = client
@@ -458,6 +498,15 @@ func (s *GServer) handleClientConnectionsAndDisconnections() {
 
 	// Handle queuedDisconnections
 	for _, clientID := range disconnections {
+
+		// Attempt to save player
+		err := s.serverDB.SavePlayer(s.WorldController.GameWorld.Players[clientID])
+		if err != nil {
+			log.Printf("Failed to save player %s: %s", clientID, err)
+		}
+
+		log.Println("Saved: ", clientID)
+
 		s.WorldController.DeletePlayer(clientID)
 		s.MessageRouter.PushGlobalLogMessage("GLOBAL", fmt.Sprintf("Player %s disconnected", clientID))
 	}

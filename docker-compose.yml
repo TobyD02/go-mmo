@@ -16,6 +16,7 @@ services:
       INTERACTABLES_CONFIG: "/data/interactables.json"
       ITEMS_CONFIG: "/data/items.json"
       NPCS_CONFIG: "/data/npcs.json"
+      SQLITE_PATH: "/game.db"
     ports:
       - "8080:8080"
     volumes:

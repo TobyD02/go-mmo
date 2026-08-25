@@ -195,10 +195,9 @@ func (wc *GWorldController) DeleteNpc(npcInstanceID string) {
 }
 
 func (wc *GWorldController) SpawnNewPlayer(playerID string) error {
-	return wc.AddPlayer(playerID, wc.GameWorld.SpawnPoint.X, wc.GameWorld.SpawnPoint.Y)
-}
+	x := wc.GameWorld.SpawnPoint.X
+	y := wc.GameWorld.SpawnPoint.Y
 
-func (wc *GWorldController) AddPlayer(playerID string, x, y int) error {
 	// can only spawn on walkable tiles
 	if !game.CanWalk(wc.GameWorld.QueryMap(x, y)) {
 		return fmt.Errorf("Cannot add player")
@@ -207,6 +206,21 @@ func (wc *GWorldController) AddPlayer(playerID string, x, y int) error {
 	wc.addPlayer(game.NewGPlayer(playerID, x, y))
 
 	wc.playerSpatialIndex.Add(playerID, util.Vec2{X: x, Y: y})
+	wc.changedPlayers[playerID] = struct{}{}
+
+	return nil
+}
+
+func (wc *GWorldController) SpawnExistingPlayer(playerID string, player *game.GPlayer) error {
+	// can only spawn on walkable tiles
+	// @todo - figure out what to do if for some reason returning player spawns in a wall?
+	//if !game.CanWalk(wc.GameWorld.QueryMap(player.Pos.X, player.Pos.Y)) {
+	//	return fmt.Errorf("Cannot add player")
+	//}
+
+	wc.addPlayer(player)
+
+	wc.playerSpatialIndex.Add(playerID, player.Pos)
 	wc.changedPlayers[playerID] = struct{}{}
 
 	return nil

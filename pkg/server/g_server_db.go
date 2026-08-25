@@ -13,6 +13,24 @@ func NewGServerDB(db database.DB) *GServerDB {
 	return &GServerDB{db}
 }
 
+func (d *GServerDB) PlayerExists(playerID string) (bool, error) {
+	err := d.db.Connect()
+	if err != nil {
+		return false, err
+	}
+
+	defer d.db.Close()
+
+	playerRow := d.db.QueryRow("SELECT player_id, pos_x, pos_y FROM player WHERE player_id=?", playerID)
+	var player game.GPlayer
+	err = playerRow.Scan(&player.ID, &player.Pos.X, &player.Pos.Y)
+	if err != nil {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 func (d *GServerDB) LoadPlayer(playerID string) (*game.GPlayer, error) {
 	err := d.db.Connect()
 	if err != nil {
