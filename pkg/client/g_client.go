@@ -412,3 +412,7 @@ func (c *GClient) QueryTile(x, y int) game.GameWorldTile {
 func (c *GClient) IsInBounds(x, y int) bool {
 	return c.clientWorld.IsInBounds(x, y)
 }
+
+func (c *GClient) GetWorldDimensions() (width, height int) {
+	return c.clientWorld.gameWorld.Width, c.clientWorld.gameWorld.Height
+}

@@ -20,7 +20,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = gClient.Start(serverURI, "toby")
+	err = gClient.Start(serverURI, "ebitengine")
 	if err != nil {
 		log.Fatal(err)
 	}
