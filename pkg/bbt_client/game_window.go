@@ -53,7 +53,7 @@ func InitialModel(
 
 func tick() tea.Cmd {
 	return tea.Tick(
-		config.ClientTickSpeed,
+		time.Millisecond,
 		func(time.Time) tea.Msg {
 			return GameTickMsg{}
 		},

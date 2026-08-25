@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/game"
@@ -18,8 +20,10 @@ type GClient struct {
 
 	clientWorld *GClientWorld
 
-	InboundMessages  chan []byte
-	OutboundMessages chan []byte
+	InboundMessages chan []byte
+
+	OutboundMessages      map[messages.GMessageType][]byte
+	outboundMessagesMutex sync.Mutex
 
 	DrainedMessages map[messages.GMessageType][]*messages.GMessage
 
@@ -37,7 +41,7 @@ func NewGClient(readOnly bool) (*GClient, error) {
 
 	return &GClient{
 		InboundMessages:  make(chan []byte, 100),
-		OutboundMessages: make(chan []byte, 100),
+		OutboundMessages: make(map[messages.GMessageType][]byte, 100),
 		Logs:             make([]*messages.GServerLogMessage, 0, logLimit),
 		logLimit:         logLimit,
 
@@ -113,18 +117,32 @@ func (c *GClient) WriteLoop() {
 		return // cannot write in read only mode
 	}
 
+	ticker := time.NewTicker(config.ClientTickSpeed)
+	defer ticker.Stop()
+
 	for {
 		select {
-
-		case message := <-c.OutboundMessages:
-			if err := c.conn.WriteMessage(message); err != nil {
-				log.Printf("Failed to write message: %s", err)
-				return
-			}
+		case <-ticker.C:
+			c.flushOutboundMessages()
 		case <-c.done:
 			return
 		}
 	}
+}
+
+func (c *GClient) flushOutboundMessages() {
+	c.outboundMessagesMutex.Lock()
+	messagesToSend := c.OutboundMessages
+	c.OutboundMessages = make(map[messages.GMessageType][]byte)
+	c.outboundMessagesMutex.Unlock()
+
+	for _, msg := range messagesToSend {
+		if err := c.conn.WriteMessage(msg); err != nil {
+			log.Printf("Failed to write message: %s", err)
+			c.StopAndCloseConnection()
+		}
+	}
+
 }
 
 func (c *GClient) ReadLoop() {
@@ -166,15 +184,15 @@ func (c *GClient) sendClientConnectedMessage(clientID string) error {
 }
 
 func (c *GClient) Move(dx, dy int) error {
-	return c.sendMessage(messages.NewGClientMoveMessage(dx, dy))
+	return c.queueMessage(messages.NewGClientMoveMessage(dx, dy))
 }
 
 func (c *GClient) Interact(interactableInstanceID string) error {
-	return c.sendMessage(messages.NewGClientInteractMessage(interactableInstanceID))
+	return c.queueMessage(messages.NewGClientInteractMessage(interactableInstanceID))
 }
 
 func (c *GClient) Attack(npcInstanceID string) error {
-	return c.sendMessage(messages.NewGClientAttackNpcMessage(npcInstanceID))
+	return c.queueMessage(messages.NewGClientAttackNpcMessage(npcInstanceID))
 }
 
 // sendMessageSync - Sends a message synchronously (doesn't use the write loop goroutine)
@@ -199,7 +217,7 @@ func (c *GClient) sendMessageSync(msg *messages.GMessage, err error) error {
 
 }
 
-func (c *GClient) sendMessage(msg *messages.GMessage, err error) error {
+func (c *GClient) queueMessage(msg *messages.GMessage, err error) error {
 
 	if c.readOnly {
 		return fmt.Errorf("cannot send messages in read only mode")
@@ -209,12 +227,15 @@ func (c *GClient) sendMessage(msg *messages.GMessage, err error) error {
 		return fmt.Errorf("failed to create message %s", err)
 	}
 
+	messageType := msg.Type
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %s", err)
 	}
 
-	c.OutboundMessages <- data
+	c.outboundMessagesMutex.Lock()
+	c.OutboundMessages[messageType] = data
+	c.outboundMessagesMutex.Unlock()
 
 	return nil
 }
