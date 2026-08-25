@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/game"
 	"github.com/tobyd02/go-mmo/pkg/messages"
 )
@@ -15,6 +16,8 @@ type GClient struct {
 	Logs     []*messages.GServerLogMessage
 	logLimit int
 
+	clientWorld *GClientWorld
+
 	InboundMessages  chan []byte
 	OutboundMessages chan []byte
 
@@ -24,8 +27,13 @@ type GClient struct {
 	done     chan struct{}
 }
 
-func NewGClient(readOnly bool) *GClient {
+func NewGClient(readOnly bool) (*GClient, error) {
 	logLimit := 100
+
+	initialWorldState, err := game.NewGameWorld(config.GameWorldFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to load initial game world state")
+	}
 
 	return &GClient{
 		InboundMessages:  make(chan []byte, 100),
@@ -33,12 +41,14 @@ func NewGClient(readOnly bool) *GClient {
 		Logs:             make([]*messages.GServerLogMessage, 0, logLimit),
 		logLimit:         logLimit,
 
+		clientWorld: NewGClientWorld(initialWorldState),
+
 		DrainedMessages: make(map[messages.GMessageType][]*messages.GMessage),
 
 		readOnly: readOnly,
 		conn:     NewClientWebsocket(),
 		done:     make(chan struct{}),
-	}
+	}, nil
 }
 
 func (c *GClient) connectToServer(serverURI string) error {
@@ -50,10 +60,10 @@ func (c *GClient) connectToServer(serverURI string) error {
 	return c.conn.Connect(uri)
 }
 
-func (c *GClient) Start(serverURI string, clientID string, initialWorldState *game.GameWorld) (*game.GameWorld, error) {
+func (c *GClient) Start(serverURI string, clientID string) error {
 	err := c.connectToServer(serverURI)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to server: %s", err)
+		return fmt.Errorf("failed to connect to server: %s", err)
 	}
 
 	// At this point, connection is established. On failure, we need to close the connection
@@ -66,23 +76,23 @@ func (c *GClient) Start(serverURI string, clientID string, initialWorldState *ga
 
 	err = c.sendClientConnectedMessage(clientID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate with server: %s", err)
+		return fmt.Errorf("failed to authenticate with server: %s", err)
 	}
 
 	c.ClientID = clientID // set client ID now that we have authenticated
 
 	msg, err := c.readMessage()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read message from server %s", err)
+		return fmt.Errorf("failed to read message from server %s", err)
 	}
 
 	if msg.Type != messages.TServerInitialWorldStateMessage {
-		return nil, fmt.Errorf("message received wasn't initial world state %s", msg.Type)
+		return fmt.Errorf("message received wasn't initial world state %s", msg.Type)
 	}
 
 	parsedData, err := messages.ParseGServerInitialWorldStateData(msg.Data)
 	if err != nil {
-		log.Fatalf("Failed to parse initial world state message")
+		return fmt.Errorf("Failed to parse initial world state message")
 	}
 
 	success = true
@@ -93,9 +103,9 @@ func (c *GClient) Start(serverURI string, clientID string, initialWorldState *ga
 		go c.WriteLoop()
 	}
 
-	initialWorldState.ApplyDiff(parsedData.InitialWorldStateDiff)
+	c.clientWorld.ApplyWorldDiff(parsedData.InitialWorldStateDiff)
 
-	return initialWorldState, nil
+	return nil
 }
 
 func (c *GClient) WriteLoop() {
@@ -155,15 +165,15 @@ func (c *GClient) sendClientConnectedMessage(clientID string) error {
 	return c.sendMessageSync(messages.NewGClientConnectedMessage(clientID))
 }
 
-func (c *GClient) SendMoveMessage(dx, dy int) error {
+func (c *GClient) Move(dx, dy int) error {
 	return c.sendMessage(messages.NewGClientMoveMessage(dx, dy))
 }
 
-func (c *GClient) SendInteractMessage(interactableInstanceID string) error {
+func (c *GClient) Interact(interactableInstanceID string) error {
 	return c.sendMessage(messages.NewGClientInteractMessage(interactableInstanceID))
 }
 
-func (c *GClient) SendAttackNpcMessage(npcInstanceID string) error {
+func (c *GClient) Attack(npcInstanceID string) error {
 	return c.sendMessage(messages.NewGClientAttackNpcMessage(npcInstanceID))
 }
 
@@ -258,8 +268,24 @@ func (c *GClient) ProcessServerLogMessages() error {
 }
 
 // Update - Must be called at the start of every client tick
-func (c *GClient) Update() {
+func (c *GClient) Update() error {
 	c.drainMessages()
+
+	diff, err := c.ReadGameWorldDiff()
+	if err != nil {
+		return err
+	}
+
+	if diff != nil {
+		c.clientWorld.ApplyWorldDiff(diff)
+	}
+
+	err = c.ProcessServerLogMessages()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *GClient) drainMessages() {
@@ -316,4 +342,51 @@ func (c *GClient) popAllDrainedMessages(messageType messages.GMessageType) []*me
 	delete(c.DrainedMessages, messageType)
 
 	return msgs
+}
+
+func (c *GClient) InteractDirection(dx, dy int) {
+	self := c.QuerySelf()
+
+	newX := self.Pos.X + dx
+	newY := self.Pos.Y + dy
+
+	npcInstances := c.clientWorld.QueryNpcInstancesAtPosition(newX, newY)
+	interactableInstance := c.clientWorld.QueryInteractableInstanceAtPosition(newX, newY)
+
+	for _, npcInstance := range npcInstances {
+		_ = c.Attack(npcInstance.ID) // attack the first found and then return
+		return
+	}
+
+	if interactableInstance != nil {
+		_ = c.Interact(interactableInstance.ID)
+		return
+	}
+
+	return
+}
+
+// ---- Wrappers for client world
+func (c *GClient) QuerySelf() *game.GPlayer {
+	return c.clientWorld.QueryPlayer(c.ClientID)
+}
+
+func (c *GClient) QueryInteractable(x, y int) *game.GInteractableInstance {
+	return c.clientWorld.QueryInteractableInstanceAtPosition(x, y)
+}
+
+func (c *GClient) QueryPlayers(x, y int) map[string]*game.GPlayer {
+	return c.clientWorld.QueryPlayersAtPosition(x, y)
+}
+
+func (c *GClient) QueryNpcs(x, y int) map[string]*game.GNpcInstance {
+	return c.clientWorld.QueryNpcInstancesAtPosition(x, y)
+}
+
+func (c *GClient) QueryTile(x, y int) game.GameWorldTile {
+	return c.clientWorld.QueryMap(x, y)
+}
+
+func (c *GClient) IsInBounds(x, y int) bool {
+	return c.clientWorld.IsInBounds(x, y)
 }

@@ -17,8 +17,7 @@ import (
 )
 
 type GameModel struct {
-	clientWorld *client.GClientWorld
-	client      *client.GClient
+	client *client.GClient
 
 	moveInputDir     [4]int // up, down, left, right
 	interactInputDir [4]int // up, down, left, right
@@ -36,7 +35,6 @@ type ConnectionErrorMsg struct {
 type GameTickMsg struct{}
 
 func InitialModel(
-	gameWorld *game.GameWorld,
 	gClient *client.GClient,
 ) GameModel {
 
@@ -46,8 +44,7 @@ func InitialModel(
 	chatInput.CharLimit = 200
 
 	return GameModel{
-		clientWorld: client.NewGClientWorld(gameWorld),
-		client:      gClient,
+		client: gClient,
 
 		chatInput:  chatInput,
 		chatOutput: "",
@@ -67,50 +64,22 @@ func (m GameModel) Init() tea.Cmd {
 	return tick()
 }
 
-func (m GameModel) interactDirection(dx, dy int) {
-	self := m.clientWorld.QueryPlayer(m.client.ClientID)
-
-	newX := self.Pos.X + dx
-	newY := self.Pos.Y + dy
-
-	npcInstances := m.clientWorld.QueryNpcInstancesAtPosition(newX, newY)
-	interactableInstance := m.clientWorld.QueryInteractableInstanceAtPosition(newX, newY)
-
-	for _, npcInstance := range npcInstances {
-		_ = m.client.SendAttackNpcMessage(npcInstance.ID) // attack the first found and then return
-		return
-	}
-
-	if interactableInstance != nil {
-		_ = m.client.SendInteractMessage(interactableInstance.ID)
-		return
-	}
-
-	return
-}
-
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case GameTickMsg:
-		m.client.Update()
-
-		diff, err := m.client.ReadGameWorldDiff()
+		err := m.client.Update()
 		if err != nil {
 			return m, func() tea.Msg {
 				return ConnectionErrorMsg{Err: err}
 			}
 		}
 
-		if diff != nil {
-			m.clientWorld.ApplyWorldDiff(diff)
-		}
-
 		moveX := m.moveInputDir[3] - m.moveInputDir[2]
 		moveY := m.moveInputDir[1] - m.moveInputDir[0]
 
 		if moveX != 0 || moveY != 0 {
-			_ = m.client.SendMoveMessage(moveX, moveY)
+			_ = m.client.Move(moveX, moveY)
 		}
 
 		m.moveInputDir = [4]int{}
@@ -119,12 +88,10 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		interactY := m.interactInputDir[1] - m.interactInputDir[0]
 
 		if interactX != 0 || interactY != 0 {
-			m.interactDirection(interactX, interactY)
+			m.client.InteractDirection(interactX, interactY)
 		}
 
 		m.interactInputDir = [4]int{}
-
-		_ = m.client.ProcessServerLogMessages()
 
 		return m, tick()
 
@@ -206,7 +173,7 @@ func (m GameModel) View() tea.View {
 	viewportWidth := config.ClientViewportTilesX
 	viewportHeight := config.ClientViewportTilesY
 
-	clientPlayer := m.clientWorld.QueryPlayer(m.client.ClientID)
+	clientPlayer := m.client.QuerySelf()
 	if clientPlayer == nil {
 		return tea.NewView("Loading...")
 	}
@@ -223,14 +190,14 @@ func (m GameModel) View() tea.View {
 	for y := startY; y < endY; y++ {
 		for x := startX; x < endX; x++ {
 
-			if !m.clientWorld.IsInBounds(x, y) {
+			if !m.client.IsInBounds(x, y) {
 				world.WriteString(" ")
 				continue
 			}
 
-			players := m.clientWorld.QueryPlayersAtPosition(x, y)
-			interactableInstance := m.clientWorld.QueryInteractableInstanceAtPosition(x, y)
-			npcInstances := m.clientWorld.QueryNpcInstancesAtPosition(x, y)
+			players := m.client.QueryPlayers(x, y)
+			interactableInstance := m.client.QueryInteractable(x, y)
+			npcInstances := m.client.QueryNpcs(x, y)
 
 			if len(players) > 0 {
 				if players[m.client.ClientID] != nil {
@@ -255,7 +222,7 @@ func (m GameModel) View() tea.View {
 				continue
 			}
 
-			drawTile(&world, m.clientWorld.QueryMap(x, y))
+			drawTile(&world, m.client.QueryTile(x, y))
 		}
 
 		world.WriteString("\n")
@@ -345,7 +312,7 @@ func (m GameModel) doCmd(msg string) string {
 			return "x and y must be -1, 0, or 1"
 		}
 
-		m.client.SendMoveMessage(x, y)
+		_ = m.client.Move(x, y)
 
 		return fmt.Sprintf("Sent move command: dx %d, dy %d", x, y)
 	}
