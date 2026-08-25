@@ -82,12 +82,15 @@ func (t *MEInteractableDrawer) Draw(screen *ebiten.Image, interactables map[stri
 
 	isActive := activeMode == MEMapEditorMode_Interactables
 
-	for interactableID, positions := range interactables {
+	for idx, interactableID := range t.interactableIDs {
+		if idx == t.activeInteractable {
+			continue
+		}
 		col, exists := t.interactableColors[interactableID]
 		if !exists {
 			panic("missing color for interactable: " + interactableID)
 		}
-		for _, pos := range positions {
+		for _, pos := range interactables[interactableID] {
 			realX, realY := t.getCam().WorldToScreenPos(float32(pos.X), float32(pos.Y))
 			realSize := t.getCam().WorldToScreenScale(METileSize)
 			vector.FillRect(screen, realX, realY, realSize, realSize, col, false)
@@ -95,6 +98,20 @@ func (t *MEInteractableDrawer) Draw(screen *ebiten.Image, interactables map[stri
 			if isActive && t.interactableIDs[t.activeInteractable] == interactableID {
 				vector.StrokeRect(screen, realX, realY, realSize, realSize, 1, color.White, false)
 			}
+		}
+	}
+	activeInteractableID := t.interactableIDs[t.activeInteractable]
+	col, exists := t.interactableColors[activeInteractableID]
+	if !exists {
+		panic("missing color for interactable: " + activeInteractableID)
+	}
+	for _, pos := range interactables[activeInteractableID] {
+		realX, realY := t.getCam().WorldToScreenPos(float32(pos.X), float32(pos.Y))
+		realSize := t.getCam().WorldToScreenScale(METileSize)
+		vector.FillRect(screen, realX, realY, realSize, realSize, col, false)
+
+		if isActive && t.interactableIDs[t.activeInteractable] == activeInteractableID {
+			vector.StrokeRect(screen, realX, realY, realSize, realSize, 1, color.White, false)
 		}
 	}
 }

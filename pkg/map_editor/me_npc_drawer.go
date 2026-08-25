@@ -82,12 +82,15 @@ func (t *MENpcDrawer) Draw(screen *ebiten.Image, npcs map[string][]util.Vec2, ac
 
 	isActive := activeMode == MEMapEditorMode_Npcs
 
-	for npcID, positions := range npcs {
+	for idx, npcID := range t.npcIDs {
+		if idx == t.activeNpc {
+			continue
+		}
 		col, exists := t.npcColors[npcID]
 		if !exists {
 			panic("missing color for npc: " + npcID)
 		}
-		for _, pos := range positions {
+		for _, pos := range npcs[npcID] {
 			realX, realY := t.getCam().WorldToScreenPos(float32(pos.X), float32(pos.Y))
 			realSize := t.getCam().WorldToScreenScale(METileSize)
 			vector.FillRect(screen, realX, realY, realSize, realSize, col, false)
@@ -95,6 +98,20 @@ func (t *MENpcDrawer) Draw(screen *ebiten.Image, npcs map[string][]util.Vec2, ac
 			if isActive && t.npcIDs[t.activeNpc] == npcID {
 				vector.StrokeRect(screen, realX, realY, realSize, realSize, 1, color.White, false)
 			}
+		}
+	}
+	activeNpcID := t.npcIDs[t.activeNpc]
+	col, exists := t.npcColors[activeNpcID]
+	if !exists {
+		panic("missing color for npc: " + activeNpcID)
+	}
+	for _, pos := range npcs[activeNpcID] {
+		realX, realY := t.getCam().WorldToScreenPos(float32(pos.X), float32(pos.Y))
+		realSize := t.getCam().WorldToScreenScale(METileSize)
+		vector.FillRect(screen, realX, realY, realSize, realSize, col, false)
+
+		if isActive && t.npcIDs[t.activeNpc] == activeNpcID {
+			vector.StrokeRect(screen, realX, realY, realSize, realSize, 1, color.White, false)
 		}
 	}
 }
