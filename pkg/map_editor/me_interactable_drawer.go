@@ -20,14 +20,13 @@ type MEInteractableDrawer struct {
 	interactableRegistry game.GInteractableRegistry
 	isErasing            bool
 
-	worldWidth  int
-	worldHeight int
+	getMapEditor func() *MEMapEditor
 
 	interactableColors map[string]color.Color
 	spatialIndex       util.GSpatialIndex
 }
 
-func NewMEInteractableDrawer(getCam func() *MECamera, worldWidth, worldHeight int) *MEInteractableDrawer {
+func NewMEInteractableDrawer(getCam func() *MECamera, getMapEditor func() *MEMapEditor) *MEInteractableDrawer {
 	interactableRegistry, err := game.GetInteractableRegistry()
 	if err != nil {
 		panic(err)
@@ -58,8 +57,7 @@ func NewMEInteractableDrawer(getCam func() *MECamera, worldWidth, worldHeight in
 		interactableIDs:      interactableIDs,
 		interactableRegistry: interactableRegistry,
 
-		worldWidth:  worldWidth,
-		worldHeight: worldHeight,
+		getMapEditor: getMapEditor,
 
 		interactableColors: interactableColors,
 		spatialIndex:       util.NewGSpatialIndex(),
@@ -201,9 +199,9 @@ func (t *MEInteractableDrawer) eraseInteractable(x, y int, interactables map[str
 
 func (t *MEInteractableDrawer) positionInBounds(x, y int) bool {
 	return x >= 0 &&
-		x < t.worldWidth &&
+		x < t.getMapEditor().worldWidth &&
 		y >= 0 &&
-		y < t.worldHeight
+		y < t.getMapEditor().worldHeight
 }
 
 func (t *MEInteractableDrawer) interactableSafe(x, y int) bool {

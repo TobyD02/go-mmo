@@ -42,6 +42,8 @@ type MEMapEditor struct {
 
 	lastErrorMessage string
 	lastErrorTime    time.Time
+
+	worldWidth, worldHeight int
 }
 
 func NewMEMapEditor() (*MEMapEditor, error) {
@@ -50,7 +52,13 @@ func NewMEMapEditor() (*MEMapEditor, error) {
 		return nil, err
 	}
 
-	mapEditor := &MEMapEditor{}
+	worldHeight := len(worldFile.Tiles)
+	worldWidth := len(worldFile.Tiles[0])
+
+	mapEditor := &MEMapEditor{
+		worldWidth:  worldWidth,
+		worldHeight: worldHeight,
+	}
 	getMapEditor := func() *MEMapEditor {
 		return mapEditor
 	}
@@ -65,13 +73,13 @@ func NewMEMapEditor() (*MEMapEditor, error) {
 		return tileDrawer
 	}
 
-	npcDrawer := NewMENpcDrawer(getCamera, len(worldFile.Tiles[0]), len(worldFile.Tiles))
+	npcDrawer := NewMENpcDrawer(getCamera, getMapEditor)
 	getNpcDrawer := func() *MENpcDrawer {
 		return npcDrawer
 	}
 	npcDrawer.Init(worldFile.Npcs)
 
-	interactableDrawer := NewMEInteractableDrawer(getCamera, len(worldFile.Tiles[0]), len(worldFile.Tiles))
+	interactableDrawer := NewMEInteractableDrawer(getCamera, getMapEditor)
 	getInteractableDrawer := func() *MEInteractableDrawer {
 		return interactableDrawer
 	}
@@ -97,6 +105,30 @@ func (m *MEMapEditor) Update() error {
 	if ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyS) {
 		m.lastErrorMessage = m.Save()
 		m.lastErrorTime = time.Now()
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyEqual) {
+		m.Resize(m.worldWidth+1, m.worldHeight+1)
+		m.worldWidth++
+		m.worldHeight++
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyControl) && ebiten.IsKeyPressed(ebiten.KeyShift) && inpututil.IsKeyJustPressed(ebiten.KeyEqual) {
+		m.Resize(m.worldWidth+10, m.worldHeight+10)
+		m.worldWidth += 10
+		m.worldHeight += 10
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyControl) && inpututil.IsKeyJustPressed(ebiten.KeyMinus) {
+		m.Resize(m.worldWidth-1, m.worldHeight-1)
+		m.worldWidth--
+		m.worldHeight--
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyControl) && ebiten.IsKeyPressed(ebiten.KeyShift) && inpututil.IsKeyJustPressed(ebiten.KeyMinus) {
+		m.Resize(m.worldWidth-10, m.worldHeight-10)
+		m.worldWidth -= 10
+		m.worldHeight -= 10
 	}
 
 	m.camera.Update()
@@ -138,4 +170,35 @@ func (m *MEMapEditor) Save() string {
 	}
 
 	return "Saved!"
+}
+
+func (m *MEMapEditor) Resize(width, height int) error {
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("width and height must be greater than 0")
+	}
+
+	newTiles := make([][]int, height)
+
+	for y := range newTiles {
+		newTiles[y] = make([]int, width)
+	}
+
+	oldHeight := len(m.worldFile.Tiles)
+	if oldHeight == 0 {
+		m.worldFile.Tiles = newTiles
+		return nil
+	}
+
+	oldWidth := len(m.worldFile.Tiles[0])
+
+	copyHeight := min(oldHeight, height)
+	copyWidth := min(oldWidth, width)
+
+	for y := 0; y < copyHeight; y++ {
+		copy(newTiles[y][:copyWidth], m.worldFile.Tiles[y][:copyWidth])
+	}
+
+	m.worldFile.Tiles = newTiles
+
+	return nil
 }

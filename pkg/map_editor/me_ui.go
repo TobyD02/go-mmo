@@ -19,14 +19,14 @@ func NewMEUi(
 	getTileDrawer func() *METileDrawer,
 	getNpcDrawer func() *MENpcDrawer,
 	getInteractableDrawer func() *MEInteractableDrawer,
-	getMapDrawer func() *MEMapEditor,
+	getMapEditor func() *MEMapEditor,
 ) *MEUi {
 
 	return &MEUi{
 		getTileDrawer:         getTileDrawer,
 		getInteractableDrawer: getInteractableDrawer,
 		getNpcDrawer:          getNpcDrawer,
-		getMapEditor:          getMapDrawer,
+		getMapEditor:          getMapEditor,
 	}
 }
 

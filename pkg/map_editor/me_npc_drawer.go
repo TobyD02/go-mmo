@@ -20,14 +20,13 @@ type MENpcDrawer struct {
 	npcRegistry game.GNpcRegistry
 	isErasing   bool
 
-	worldWidth  int
-	worldHeight int
+	getMapEditor func() *MEMapEditor
 
 	npcColors    map[string]color.Color
 	spatialIndex util.GSpatialIndex
 }
 
-func NewMENpcDrawer(getCam func() *MECamera, worldWidth, worldHeight int) *MENpcDrawer {
+func NewMENpcDrawer(getCam func() *MECamera, getMapEditor func() *MEMapEditor) *MENpcDrawer {
 	npcRegistry, err := game.GetNpcRegistry()
 	if err != nil {
 		panic(err)
@@ -58,8 +57,7 @@ func NewMENpcDrawer(getCam func() *MECamera, worldWidth, worldHeight int) *MENpc
 		npcIDs:      npcIDs,
 		npcRegistry: npcRegistry,
 
-		worldWidth:  worldWidth,
-		worldHeight: worldHeight,
+		getMapEditor: getMapEditor,
 
 		npcColors:    npcColors,
 		spatialIndex: util.NewGSpatialIndex(),
@@ -201,9 +199,9 @@ func (t *MENpcDrawer) eraseNpc(x, y int, npcs map[string][]util.Vec2) {
 
 func (t *MENpcDrawer) positionInBounds(x, y int) bool {
 	return x >= 0 &&
-		x < t.worldWidth &&
+		x < t.getMapEditor().worldWidth &&
 		y >= 0 &&
-		y < t.worldHeight
+		y < t.getMapEditor().worldHeight
 }
 
 func (t *MENpcDrawer) npcSafe(x, y int) bool {
