@@ -36,12 +36,13 @@ var interactableOccupiedOtherStyle = lipgloss.NewStyle().Foreground(lipgloss.Col
 var interactableCooldownStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#1a3847")).Bold(true)
 
 // World viewport dimensions in terminal characters.
-var worldWidth = config.ClientViewportTilesX * config.ClientTileWidth
-var worldHeight = config.ClientViewportTilesY
+// Will do custom width and height
+var worldWidth = config.BBTClientViewportTilesX * config.ClientTileWidth
+var worldHeight = config.BBTClientViewportTilesY
 
 // Inventory/log area below the world.
 var invWidth = worldWidth / 4
-var invHeight = config.ClientRows - worldHeight - 1 - 2
+var invHeight = config.BBTClientRows - worldHeight - 1 - 2
 
 // -1 = world border
 // -2 = chat height
@@ -54,7 +55,7 @@ var chatHeight = 2
 
 // Overall game dimensions.
 var styleX = worldWidth
-var styleY = config.ClientRows
+var styleY = config.BBTClientRows
 
 var gameStyle = lipgloss.NewStyle().
 	Width(styleX).

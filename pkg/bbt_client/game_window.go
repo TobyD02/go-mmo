@@ -170,8 +170,8 @@ func (m GameModel) View() tea.View {
 	var log strings.Builder
 	var inventory strings.Builder
 
-	viewportWidth := config.ClientViewportTilesX
-	viewportHeight := config.ClientViewportTilesY
+	viewportWidth := config.BBTClientViewportTilesX
+	viewportHeight := config.BBTClientViewportTilesY
 
 	clientPlayer := m.client.QuerySelf()
 	if clientPlayer == nil {

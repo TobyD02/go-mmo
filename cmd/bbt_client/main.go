@@ -22,7 +22,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = gClient.Start(serverURI, "toby")
+	err = gClient.Start(serverURI, "bubbletea")
 	if err != nil {
 		log.Fatal(err)
 	}
