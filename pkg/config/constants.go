@@ -4,12 +4,12 @@ package config
 import "time"
 
 // World / simulation dimensions, measured in tiles.
-const ClientSimulationRangeX = 32
-const ClientSimulationRangeY = 14
+const ClientSimulationRangeX = 64
+const ClientSimulationRangeY = 28
 
 // Client viewport, measured in world tiles.
-const ClientViewportTilesX = 64
-const ClientViewportTilesY = 28
+const BBTClientViewportTilesX = 64
+const BBTClientViewportTilesY = 28
 
 // Each world tile is rendered as 2 terminal columns.
 const ClientTileWidth = 2
@@ -19,8 +19,8 @@ const ClientTickSpeed time.Duration = time.Millisecond * 50
 const ServerTickSpeed time.Duration = time.Millisecond * 200
 
 // Terminal layout.
-const ClientRows = 40
-const ClientColumns = ClientViewportTilesX + 2
+const BBTClientRows = 40
+const BBTClientColumns = BBTClientViewportTilesX + 2
 
 // Spawn Protection
 const SpawnProtectionRadius = 10
