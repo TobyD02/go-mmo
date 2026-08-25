@@ -10,8 +10,15 @@
   - On client connection need to load player
   - On client disconnection need to save player
   - Before client connection - client should ask for username/user id
-- [ ] Add NPC Respawns
-  - When an npc dies, it should respawn after a certain amount of time at its initial spawn point (from map file)
+- [ ] Replace NPC in map world file with NPC Spawns
+  - Represent spawn points rather than NPC's themselves. 
+    - Server logic can change, so long as a player is within range - if an NPC hasn't spawned at that point then spawn one.
+    - Then if no player is in range, despawn NPC's
+  - i.e:
+    - Player in range of spawn point? spawn point = spawn npc
+    - Player out of range of NPC? despawn NPC
+  - In theory, should make diffs smaller, since spawn points will always stay the same. Only spawned NPC's will change.
+  
 - [ ] Add other NPC behaviour
   - At the moment they can only flee.
   - Will need to implement player health and respawning.
