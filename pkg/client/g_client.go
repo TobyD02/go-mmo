@@ -247,7 +247,8 @@ func (c *GClient) ReadGameWorldDiff() (*game.GameWorldDiff, error) {
 func (c *GClient) ProcessServerLogMessages() error {
 	logs := c.popAllDrainedMessages(messages.TServerLogMessage)
 	if logs == nil {
-		return fmt.Errorf("no logs to retrieve")
+		// Not an error if there are no logs, just return nil
+		return nil
 	}
 
 	for _, log := range logs {

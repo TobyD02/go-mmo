@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/tobyd02/go-mmo/pkg/client"
 	"github.com/tobyd02/go-mmo/pkg/config"
-	"github.com/tobyd02/go-mmo/pkg/game"
 )
 
 func main() {
@@ -20,16 +19,13 @@ func main() {
 	clientID := uuid.NewString()
 
 	// Make it read only
-	c := client.NewGClient(true)
-
+	c, err := client.NewGClient(true)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("Connecting to %s", serverURI)
 
-	initialWorldState, err := game.NewGameWorld(config.GameWorldFilePath)
-	if err != nil {
-		log.Fatalf("Failed to load initial world state: %s", err)
-	}
-
-	world, err := c.Start(serverURI, clientID, initialWorldState)
+	err = c.Start(serverURI, clientID)
 	if err != nil {
 		log.Fatalf("Failed to start client: %v", err)
 	}
@@ -37,29 +33,20 @@ func main() {
 	defer c.StopAndCloseConnection()
 
 	log.Printf(
-		"Connected! ClientID=%s Players=%d",
+		"Connected! ClientID=%s",
 		c.ClientID,
-		len(world.Players),
 	)
 
-	for id, player := range world.Players {
-		log.Printf(
-			"Player: id=%s position=(%d,%d)",
-			id,
-			player.Pos.X,
-			player.Pos.Y,
-		)
-	}
-
 	log.Println("Waiting for world diffs...")
-
 	// client ticker
-
 	ticker := time.NewTicker(config.ClientTickSpeed)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		c.Update() // Called first
+		err = c.Update() // Called first
+		if err != nil {
+			log.Fatalf("Failed to update client: %v", err)
+		}
 
 		diff, err := c.ReadGameWorldDiff()
 		if err != nil {
@@ -71,6 +58,6 @@ func main() {
 				"Received world diff: %s", time.Now(),
 			)
 		}
-		// c.SendMoveMessage(rand.IntN(3)-1, rand.IntN(3)-1)
+		//_ = c.Move(rand.IntN(3)-1, rand.IntN(3)-1)
 	}
 }
