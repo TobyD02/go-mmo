@@ -5,16 +5,20 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"github.com/tobyd02/go-mmo/pkg/client"
-	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/game"
+	"github.com/tobyd02/go-mmo/pkg/util"
 )
 
 // TODO: Client side prediction
 // TODO: Position Interpolation
 // TODO: Fix tile sizing/ not drawing to full screen
 // TODO: Assets
+
+// TODO: Mouse click = queue move to that position. - each tick, pop a move message and send the next.
+// TODO: On a new mouse click, replace queued messages with new path.
 
 type GEbitClient struct {
 	client   *client.GClient
@@ -25,17 +29,24 @@ type GEbitClient struct {
 
 	viewportWidth  int
 	viewportHeight int
+
+	mousePath      []util.Vec2
+	mousePathIndex int
 }
 
 func NewGEbitClient(client *client.GClient) (*GEbitClient, error) {
 
-	viewportWidth, viewportHeight := config.ClientSimulationRangeX*2, config.ClientSimulationRangeY*2
+	//viewportWidth, viewportHeight := config.ClientSimulationRangeX*2, config.ClientSimulationRangeY*2
 	windowWidth, windowHeight := 1280, 720
 
-	tileSize := min(
-		windowWidth/viewportWidth,
-		windowHeight/viewportHeight,
-	)
+	tileSize := 10
+
+	viewportWidth, viewportHeight := windowWidth/tileSize, windowHeight/tileSize
+
+	//tileSize := min(
+	//	windowWidth/viewportWidth,
+	//	windowHeight/viewportHeight,
+	//)
 
 	return &GEbitClient{
 		client:       client,
@@ -53,7 +64,24 @@ func (c *GEbitClient) Update() error {
 		return err
 	}
 
-	_ = c.client.Move(-1, 1)
+	mouseX, mouseY := ebiten.CursorPosition()
+	self := c.client.QuerySelf()
+
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		t := c.screenToWorld(mouseX, mouseY)
+		c.mousePath = c.client.GetPathTo(t)
+		c.mousePathIndex = 0
+	}
+
+	if c.mousePathIndex < len(c.mousePath)-1 {
+		if self.Pos.Equal(c.mousePath[c.mousePathIndex]) {
+			c.mousePathIndex++
+		}
+
+		move := c.client.GetMovesTo(c.mousePath[c.mousePathIndex])[0]
+		_ = c.client.Move(move.X, move.Y)
+
+	}
 
 	return nil
 }
@@ -122,6 +150,19 @@ func (c *GEbitClient) Draw(screen *ebiten.Image) {
 		}
 	}
 
+	for _, pos := range c.mousePath {
+		screenX := pos.X - startX
+		screenY := pos.Y - startY
+
+		c.drawRectStroke(
+			screen,
+			screenX,
+			screenY,
+			color.RGBA{R: 150, G: 150, B: 150, A: 200},
+		)
+
+	}
+
 }
 func (c *GEbitClient) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return c.windowWidth, c.windowHeight
@@ -133,4 +174,25 @@ func (c *GEbitClient) Close() {
 
 func (c *GEbitClient) drawRect(screen *ebiten.Image, x, y int, col color.Color) {
 	vector.FillRect(screen, float32(x*c.tileSize), float32(y*c.tileSize), float32(c.tileSize), float32(c.tileSize), col, false)
+}
+
+func (c *GEbitClient) drawRectStroke(screen *ebiten.Image, x, y int, col color.Color) {
+	vector.StrokeRect(screen, float32(x*c.tileSize), float32(y*c.tileSize), float32(c.tileSize), float32(c.tileSize), 1, col, false)
+}
+
+func (c *GEbitClient) screenToWorld(
+	screenX, screenY int,
+) util.Vec2 {
+	clientPlayer := c.client.QuerySelf()
+	if clientPlayer == nil {
+		return util.Vec2{}
+	}
+
+	startX := clientPlayer.Pos.X - c.viewportWidth/2
+	startY := clientPlayer.Pos.Y - c.viewportHeight/2
+
+	return util.Vec2{
+		X: startX + screenX/c.tileSize,
+		Y: startY + screenY/c.tileSize,
+	}
 }

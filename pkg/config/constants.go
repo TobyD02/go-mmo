@@ -4,8 +4,8 @@ package config
 import "time"
 
 // World / simulation dimensions, measured in tiles.
-const ClientSimulationRangeX = 64
-const ClientSimulationRangeY = 28
+const ClientSimulationRangeX = 256
+const ClientSimulationRangeY = 256
 
 // Client viewport, measured in world tiles.
 const BBTClientViewportTilesX = 64

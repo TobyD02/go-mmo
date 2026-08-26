@@ -1,8 +1,11 @@
 package client
 
 import (
+	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/game"
 	"github.com/tobyd02/go-mmo/pkg/util"
+
+	"github.com/matteo00gm/go-astar"
 )
 
 // Will have all private - and then client side renderer uses query methods
@@ -11,6 +14,9 @@ type GClientWorld struct {
 	playerSpatialIndex               util.GSpatialIndex
 	npcInstanceSpatialIndex          util.GSpatialIndex
 	interactableInstanceSpatialIndex util.GSpatialIndex
+
+	pathFinder       *astar.Astar
+	pathFinderOrigin util.Vec2
 }
 
 func NewGClientWorld(gameWorld *game.GameWorld) *GClientWorld {
@@ -146,4 +152,146 @@ func (c *GClientWorld) Width() int {
 
 func (c *GClientWorld) Height() int {
 	return c.gameWorld.Height
+}
+
+func (c *GClientWorld) PredictClientMovement(dx, dy int, clientID string) {
+	if dx == 0 && dy == 0 {
+		return
+	}
+
+	player, exists := c.gameWorld.Players[clientID]
+	if !exists { // Safe guard
+		return
+	}
+
+	newX := player.Pos.X + dx
+	newY := player.Pos.Y + dy
+
+	if (player.Pos.Y+dy < 0 || player.Pos.Y+dy >= len(c.gameWorld.Map)) ||
+		(player.Pos.X+dx < 0 || player.Pos.X+dx >= len(c.gameWorld.Map[player.Pos.Y+dy])) {
+		return
+	}
+
+	if !game.CanWalk(c.gameWorld.QueryMap(newX, newY)) {
+		return // Cannot move to unwalkable tile
+	}
+
+	if len(c.interactableInstanceSpatialIndex.QueryPos(newX, newY)) > 0 {
+		return // Cannot move over interactables?
+	}
+
+	playerOldPos := player.Pos
+
+	player.Pos.X += dx
+	player.Pos.Y += dy
+
+	c.playerSpatialIndex.Update(clientID, playerOldPos, player.Pos)
+}
+
+func (w *GClientWorld) BuildPathFinder(
+	center util.Vec2,
+) {
+	origin := util.Vec2{
+		X: center.X - config.ClientSimulationRangeX/2,
+		Y: center.Y - config.ClientSimulationRangeY/2,
+	}
+
+	w.pathFinderOrigin = origin
+
+	grid := make([][]int, config.ClientSimulationRangeY)
+
+	for localY := range config.ClientSimulationRangeY {
+		grid[localY] = make([]int, config.ClientSimulationRangeX)
+
+		for localX := range config.ClientSimulationRangeX {
+			worldPos := util.Vec2{
+				X: origin.X + localX,
+				Y: origin.Y + localY,
+			}
+
+			tile := w.QueryMap(worldPos.X, worldPos.Y)
+			interactable := w.interactableInstanceSpatialIndex.QueryPos(worldPos.X, worldPos.Y)
+
+			if !game.CanWalk(tile) || len(interactable) > 0 {
+				grid[localY][localX] = 1
+			}
+		}
+	}
+
+	w.pathFinder = astar.New(
+		grid,
+		&astar.EuclideanHeuristic{},
+	)
+}
+
+func (w *GClientWorld) GetPath(
+	start util.Vec2,
+	target util.Vec2,
+) []util.Vec2 {
+
+	if !w.isInPathFinderBounds(start) || !w.isInPathFinderBounds(target) {
+		return nil
+	}
+
+	startCoords := astar.Coords{
+		X: start.X - w.pathFinderOrigin.X,
+		Y: start.Y - w.pathFinderOrigin.Y,
+	}
+
+	targetCoords := astar.Coords{
+		X: target.X - w.pathFinderOrigin.X,
+		Y: target.Y - w.pathFinderOrigin.Y,
+	}
+
+	found, path := w.pathFinder.FindPath(
+		startCoords,
+		targetCoords,
+	)
+
+	if !found {
+		return nil
+	}
+
+	worldPath := make([]util.Vec2, len(path))
+
+	for i, pos := range path {
+		worldPath[i] = util.Vec2{
+			X: pos.X + w.pathFinderOrigin.X,
+			Y: pos.Y + w.pathFinderOrigin.Y,
+		}
+	}
+
+	return worldPath
+}
+
+func (w *GClientWorld) isInPathFinderBounds(
+	pos util.Vec2,
+) bool {
+	return pos.X >= w.pathFinderOrigin.X &&
+		pos.X < w.pathFinderOrigin.X+config.ClientSimulationRangeX &&
+		pos.Y >= w.pathFinderOrigin.Y &&
+		pos.Y < w.pathFinderOrigin.Y+config.ClientSimulationRangeY
+}
+
+func (w *GClientWorld) PathToMoves(
+	path []util.Vec2,
+) []util.Vec2 {
+	if len(path) < 2 {
+		return nil
+	}
+
+	moves := make(
+		[]util.Vec2,
+		0,
+		len(path)-1,
+	)
+
+	for i := 1; i < len(path); i++ {
+		moves = append(moves, util.Vec2{
+			X: path[i].X - path[i-1].X,
+			Y: path[i].Y - path[i-1].Y,
+		})
+	}
+
+	return moves
 }

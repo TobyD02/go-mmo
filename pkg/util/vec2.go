@@ -30,15 +30,15 @@ func (v Vec2) Length() float64 {
 
 func (v Vec2) Direction(v2 Vec2) Vec2 {
 	return Vec2{
-		X: sign(v2.X - v.X),
-		Y: sign(v2.Y - v.Y),
+		X: Sign(v2.X - v.X),
+		Y: Sign(v2.Y - v.Y),
 	}
 }
 
 func (v Vec2) Normalize() Vec2 {
 	return Vec2{
-		X: sign(v.X),
-		Y: sign(v.Y),
+		X: Sign(v.X),
+		Y: Sign(v.Y),
 	}
 }
 
@@ -53,7 +53,7 @@ func (v Vec2) Equal(v2 Vec2) bool {
 	return v.X == v2.X && v.Y == v2.Y
 }
 
-func sign(n int) int {
+func Sign(n int) int {
 	switch {
 	case n < 0:
 		return -1

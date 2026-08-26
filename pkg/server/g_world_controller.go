@@ -250,6 +250,9 @@ func (wc *GWorldController) MovePlayer(client *GServerClient, dx, dy int) {
 		return
 	}
 
+	dx = util.Sign(dx)
+	dy = util.Sign(dy)
+
 	newX := player.Pos.X + dx
 	newY := player.Pos.Y + dy
 

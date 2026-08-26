@@ -10,6 +10,7 @@ import (
 	"github.com/tobyd02/go-mmo/pkg/config"
 	"github.com/tobyd02/go-mmo/pkg/game"
 	"github.com/tobyd02/go-mmo/pkg/messages"
+	"github.com/tobyd02/go-mmo/pkg/util"
 )
 
 type GClient struct {
@@ -26,6 +27,9 @@ type GClient struct {
 	outboundMessagesMutex sync.Mutex
 
 	DrainedMessages map[messages.GMessageType][]*messages.GMessage
+
+	tickCounter     int
+	lastMessageTick map[messages.GMessageType]int
 
 	readOnly bool
 	done     chan struct{}
@@ -48,6 +52,9 @@ func NewGClient(readOnly bool) (*GClient, error) {
 		clientWorld: NewGClientWorld(initialWorldState),
 
 		DrainedMessages: make(map[messages.GMessageType][]*messages.GMessage),
+
+		lastMessageTick: make(map[messages.GMessageType]int),
+		tickCounter:     0,
 
 		readOnly: readOnly,
 		conn:     NewClientWebsocket(),
@@ -183,15 +190,15 @@ func (c *GClient) sendClientConnectedMessage(clientID string) error {
 	return c.sendMessageSync(messages.NewGClientConnectedMessage(clientID))
 }
 
-func (c *GClient) Move(dx, dy int) error {
+func (c *GClient) moveMessage(dx, dy int) error {
 	return c.queueMessage(messages.NewGClientMoveMessage(dx, dy))
 }
 
-func (c *GClient) Interact(interactableInstanceID string) error {
+func (c *GClient) interactMessage(interactableInstanceID string) error {
 	return c.queueMessage(messages.NewGClientInteractMessage(interactableInstanceID))
 }
 
-func (c *GClient) Attack(npcInstanceID string) error {
+func (c *GClient) attackMessage(npcInstanceID string) error {
 	return c.queueMessage(messages.NewGClientAttackNpcMessage(npcInstanceID))
 }
 
@@ -228,6 +235,17 @@ func (c *GClient) queueMessage(msg *messages.GMessage, err error) error {
 	}
 
 	messageType := msg.Type
+
+	lastTick, exists := c.lastMessageTick[messageType]
+
+	if exists == true {
+		if lastTick == c.tickCounter {
+			return fmt.Errorf("already submitted a message of this type this tick")
+		}
+	}
+
+	c.lastMessageTick[messageType] = c.tickCounter
+
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %s", err)
@@ -236,6 +254,11 @@ func (c *GClient) queueMessage(msg *messages.GMessage, err error) error {
 	c.outboundMessagesMutex.Lock()
 	c.OutboundMessages[messageType] = data
 	c.outboundMessagesMutex.Unlock()
+
+	// TODO - Add better interpolating. Its a bit rubbish atm
+	//if messageType == messages.TClientMoveMessage {
+	//	c.predictMovement(msg)
+	//}
 
 	return nil
 }
@@ -252,6 +275,7 @@ func (c *GClient) readMessage() (*messages.GMessage, error) {
 
 func (c *GClient) ReadGameWorldDiff() (*game.GameWorldDiff, error) {
 	msg := c.popDrainedMessage(messages.TServerWorldDiffMessage)
+	// If no game world diff
 	if msg == nil {
 		return nil, nil
 	}
@@ -268,7 +292,6 @@ func (c *GClient) ReadGameWorldDiff() (*game.GameWorldDiff, error) {
 func (c *GClient) ProcessServerLogMessages() error {
 	logs := c.popAllDrainedMessages(messages.TServerLogMessage)
 	if logs == nil {
-		// Not an error if there are no logs, just return nil
 		return nil
 	}
 
@@ -293,16 +316,27 @@ func (c *GClient) ProcessServerLogMessages() error {
 func (c *GClient) Update() error {
 	c.drainMessages()
 
-	diff, err := c.ReadGameWorldDiff()
-	if err != nil {
-		return err
-	}
+	for {
+		diff, err := c.ReadGameWorldDiff()
+		if err != nil {
+			return err
+		}
 
-	if diff != nil {
+		if diff == nil {
+			break
+		}
+
 		c.clientWorld.ApplyWorldDiff(diff)
+		// If we received a diff, then the server has ticked
+		c.tickCounter++
 	}
 
-	err = c.ProcessServerLogMessages()
+	self := c.QuerySelf()
+	if self != nil {
+		c.clientWorld.BuildPathFinder(self.Pos)
+	}
+
+	err := c.ProcessServerLogMessages()
 	if err != nil {
 		return err
 	}
@@ -366,7 +400,11 @@ func (c *GClient) popAllDrainedMessages(messageType messages.GMessageType) []*me
 	return msgs
 }
 
-func (c *GClient) InteractDirection(dx, dy int) {
+func (c *GClient) Move(dx, dy int) error {
+	return c.moveMessage(dx, dy)
+}
+
+func (c *GClient) Interact(dx, dy int) {
 	self := c.QuerySelf()
 
 	newX := self.Pos.X + dx
@@ -376,16 +414,26 @@ func (c *GClient) InteractDirection(dx, dy int) {
 	interactableInstance := c.clientWorld.QueryInteractableInstanceAtPosition(newX, newY)
 
 	for _, npcInstance := range npcInstances {
-		_ = c.Attack(npcInstance.ID) // attack the first found and then return
+		_ = c.attackMessage(npcInstance.ID) // attack the first found and then return
 		return
 	}
 
 	if interactableInstance != nil {
-		_ = c.Interact(interactableInstance.ID)
+		_ = c.interactMessage(interactableInstance.ID)
 		return
 	}
 
 	return
+}
+
+func (c *GClient) predictMovement(msg *messages.GMessage) error {
+	movement, err := messages.ParseGClientMoveMessageData(msg.Data)
+	if err != nil {
+		return err
+	}
+
+	c.clientWorld.PredictClientMovement(movement.Dx, movement.Dy, c.ClientID)
+	return nil
 }
 
 // ---- Wrappers for client world
@@ -415,4 +463,31 @@ func (c *GClient) IsInBounds(x, y int) bool {
 
 func (c *GClient) GetWorldDimensions() (width, height int) {
 	return c.clientWorld.gameWorld.Width, c.clientWorld.gameWorld.Height
+}
+
+func (c *GClient) GetPathTo(target util.Vec2) []util.Vec2 {
+	self := c.QuerySelf()
+	if self == nil {
+		return nil
+	}
+
+	// Cannot get path if out of bounds
+	if !c.IsInBounds(target.X, target.Y) {
+		return nil
+	}
+
+	return c.clientWorld.GetPath(self.Pos, target)
+}
+
+func (c *GClient) GetMovesTo(target util.Vec2) []util.Vec2 {
+	path := c.GetPathTo(target)
+	if path == nil {
+		return nil
+	}
+
+	return c.clientWorld.PathToMoves(path)
+}
+
+func (c *GClient) PathToMoves(path []util.Vec2) []util.Vec2 {
+	return c.clientWorld.PathToMoves(path)
 }

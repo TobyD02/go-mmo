@@ -43,6 +43,13 @@ func NewGServerInitialWorldStateMessage(currentGameWorld *game.GameWorld, initia
 		}
 	}
 
+	// NPCs that did exist but no longer
+	for id := range initialGameWorld.Npcs {
+		if _, exists := currentGameWorld.Npcs[id]; !exists {
+			diff.NpcsDiff[id] = nil
+		}
+	}
+
 	// Interactable diff
 	for id, currentInteractable := range currentGameWorld.Interactables {
 		initialInteractable, exists := initialGameWorld.Interactables[id]
@@ -50,6 +57,13 @@ func NewGServerInitialWorldStateMessage(currentGameWorld *game.GameWorld, initia
 		// Interactable didn't exist initially, or has changed.
 		if !exists || !reflect.DeepEqual(currentInteractable, initialInteractable) {
 			diff.InteractablesDiff[id] = currentInteractable
+		}
+	}
+
+	// Interactables that did exist but no longer
+	for id := range initialGameWorld.Interactables {
+		if _, exists := currentGameWorld.Interactables[id]; !exists {
+			diff.InteractablesDiff[id] = nil
 		}
 	}
 

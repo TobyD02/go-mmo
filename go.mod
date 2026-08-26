@@ -10,6 +10,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hajimehoshi/ebiten/v2 v2.9.10
+	github.com/matteo00gm/go-astar v0.0.0-20250520204834-37241c104dc6
+	github.com/mattn/go-sqlite3 v1.14.50
 )
 
 require (
@@ -32,7 +34,6 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-runewidth v0.0.28 // indirect
-	github.com/mattn/go-sqlite3 v1.14.50 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

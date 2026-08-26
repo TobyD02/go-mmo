@@ -2,14 +2,16 @@
 
 ## TODO
 
+- [ ] Client side prediction
+  - Already implemented a basic test of it. But it results in sometimes jumpy movement
+  - Try:
+    - client side merge all diffs into 1 before applying any.
+    - try marking messages with tick number, it may help improving client side predictions
+    - On top of this, mimic server tick client side, so that i can send messages for future ticks. Server will have to account for this (perhaps rather than making 1 message type unique, make 1 message type unique per tick)
 - [ ] Server save world state (every 5 mins or so), add new endpoint that sends current world saved state (rather than just loading from file) 
   - Another way to limit payload size - the full payload would be big? maybe just the diff... need to come up with an idea.
-- [ ] Implement player saving state
-  - Current have a proof of concept for player saving and loading. Just need to integrate it into the server.
-  - see `cmd/test`
-  - On client connection need to load player
-  - On client disconnection need to save player
-  - Before client connection - client should ask for username/user id
+  - I think beyond this, world state is saved to a database every 5 minutes. Then when a client wants to connect, it first needs to get the world state from a separate endpoint (saving the websocket from transmitting a massive payload).
+  - Initial message is still world diff, but since every 5 minutes the server is saved, the payload size never gets massive.
 - [ ] Replace NPC in map world file with NPC Spawns
   - Represent spawn points rather than NPC's themselves. 
     - Server logic can change, so long as a player is within range - if an NPC hasn't spawned at that point then spawn one.
@@ -18,7 +20,6 @@
     - Player in range of spawn point? spawn point = spawn npc
     - Player out of range of NPC? despawn NPC
   - In theory, should make diffs smaller, since spawn points will always stay the same. Only spawned NPC's will change.
-  
 - [ ] Add other NPC behaviour
   - At the moment they can only flee.
   - Will need to implement player health and respawning.
@@ -27,6 +28,12 @@
 - [ ] Add Message (server/p2p)
 - [ ] Implement Ebitengine client
   - Should be a bit more confident since building map building tool
+- [ ] Universe controller
+  - Idea essenitally being that a main controller is reponsible for "spawning" servers. 
+  - It owns client connections, and depending on the user ID, proxies the websocket to the corresponding server instance.
+  - With each server running on its own goroutine, you could in theory have hundreds/thousands running. Even better, you could dynamically up and down them
+    - When a server has no players connected, save it to a db and end the process
+    - When a player requests to join a closed server, the controller spawns it in and directs player requests.
 
 **Known Issues**
 

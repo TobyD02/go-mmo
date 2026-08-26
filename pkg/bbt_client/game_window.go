@@ -53,7 +53,7 @@ func InitialModel(
 
 func tick() tea.Cmd {
 	return tea.Tick(
-		time.Millisecond,
+		config.ClientTickSpeed,
 		func(time.Time) tea.Msg {
 			return GameTickMsg{}
 		},
@@ -88,7 +88,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		interactY := m.interactInputDir[1] - m.interactInputDir[0]
 
 		if interactX != 0 || interactY != 0 {
-			m.client.InteractDirection(interactX, interactY)
+			m.client.Interact(interactX, interactY)
 		}
 
 		m.interactInputDir = [4]int{}
